@@ -1,0 +1,137 @@
+From: <Saved by vHTML>
+Subject: Invoice-30392B3C-0001
+Date: Wed, 18 Jun 2025 18:55:50 GMT
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="----=_NextPart_000_0000"; type="text/html"
+
+------=_NextPart_000_0000
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+Content-Location: Invoice-30392B3C-0001.html
+
+<!DOCTYPE html>
+<html lang="unknown">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document: Universal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .document-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .block {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        .block-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #555;
+        }
+        .block-content {
+            white-space: pre-wrap;
+        }
+        .metadata {
+            background-color: #f9f9f9;
+            padding: 10px;
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            font-size: 0.9em;
+        }
+        .block-image {
+            max-width: 100%;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="document-container">
+        <h1>Document: Universal</h1>
+        
+        
+        <div class="block">
+            <div class="block-header">Empty (block_1)</div>
+            <div class="block-content"></div>
+            
+            <img class="block-image" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACfYAAAAJCAAAAABf8LBdAAAAR0lEQVR4nO3WMQ0AIADAMMC/VyzgAhLWKti5uQcAAP9brwMAALjB9gEAJNg+AIAE2wcAkGD7AAASbB8AQILtAwBIsH0AAAkHP2EBAZCdp50AAAAASUVORK5CYII=" alt="Block block_1">
+            
+        </div>
+        
+        
+        <div class="metadata">
+            <h3>Metadane dokumentu</h3>
+            <p>Typ: universal</p>
+            <p>Język: unknown</p>
+            <p>Układ: universal</p>
+            <p>Pewność: 0.0</p>
+        </div>
+    </div>
+<script>window.data = {
+  "document": "Invoice-30392B3C-0001.pdf",
+  "processing_date": "2025-06-18T20:55:50.269817",
+  "processing_time_seconds": 2.503182,
+  "steps": {
+    "pdf_conversion": {
+      "status": "success",
+      "pages": 1,
+      "duration_seconds": 0.213993
+    },
+    "image_preprocessing": {
+      "status": "success",
+      "duration_seconds": 1.024695
+    },
+    "layout_analysis": {
+      "status": "success",
+      "layout_type": "universal",
+      "blocks_found": 1,
+      "duration_seconds": 1.105764
+    },
+    "ocr_processing": {
+      "status": "success",
+      "blocks_processed": 1,
+      "languages_detected": {
+        "unknown": 1
+      },
+      "avg_confidence": 0.0,
+      "duration_seconds": 0.154211
+    },
+    "metadata_generation": {
+      "status": "success",
+      "document_type": "universal",
+      "detected_language": "unknown",
+      "duration_seconds": 3.1e-05
+    },
+    "html_generation": {
+      "status": "success",
+      "duration_seconds": 0.003307
+    }
+  },
+  "output_files": {
+    "html": "output/mhtml_example/Invoice-30392B3C-0001/Invoice-30392B3C-0001.html",
+    "metadata": "output/mhtml_example/Invoice-30392B3C-0001/Invoice-30392B3C-0001_metadata.json",
+    "log": "/home/tom/github/fin-officer/vhtml/output/single_document/Invoice-30392B3C-0001.log"
+  }
+};</script>
+</body>
+</html>
+------=_NextPart_000_0000
+Content-Type: application/json
+Content-Transfer-Encoding: base64
+Content-Location: Invoice-30392B3C-0001_processing_log.json
+
+ewogICJkb2N1bWVudCI6ICJJbnZvaWNlLTMwMzkyQjNDLTAwMDEucGRmIiwKICAicHJvY2Vzc2luZ19kYXRlIjogIjIwMjUtMDYtMThUMjA6NTU6NTAuMjY5ODE3IiwKICAicHJvY2Vzc2luZ190aW1lX3NlY29uZHMiOiAyLjUwMzE4MiwKICAic3RlcHMiOiB7CiAgICAicGRmX2NvbnZlcnNpb24iOiB7CiAgICAgICJzdGF0dXMiOiAic3VjY2VzcyIsCiAgICAgICJwYWdlcyI6IDEsCiAgICAgICJkdXJhdGlvbl9zZWNvbmRzIjogMC4yMTM5OTMKICAgIH0sCiAgICAiaW1hZ2VfcHJlcHJvY2Vzc2luZyI6IHsKICAgICAgInN0YXR1cyI6ICJzdWNjZXNzIiwKICAgICAgImR1cmF0aW9uX3NlY29uZHMiOiAxLjAyNDY5NQogICAgfSwKICAgICJsYXlvdXRfYW5hbHlzaXMiOiB7CiAgICAgICJzdGF0dXMiOiAic3VjY2VzcyIsCiAgICAgICJsYXlvdXRfdHlwZSI6ICJ1bml2ZXJzYWwiLAogICAgICAiYmxvY2tzX2ZvdW5kIjogMSwKICAgICAgImR1cmF0aW9uX3NlY29uZHMiOiAxLjEwNTc2NAogICAgfSwKICAgICJvY3JfcHJvY2Vzc2luZyI6IHsKICAgICAgInN0YXR1cyI6ICJzdWNjZXNzIiwKICAgICAgImJsb2Nrc19wcm9jZXNzZWQiOiAxLAogICAgICAibGFuZ3VhZ2VzX2RldGVjdGVkIjogewogICAgICAgICJ1bmtub3duIjogMQogICAgICB9LAogICAgICAiYXZnX2NvbmZpZGVuY2UiOiAwLjAsCiAgICAgICJkdXJhdGlvbl9zZWNvbmRzIjogMC4xNTQyMTEKICAgIH0sCiAgICAibWV0YWRhdGFfZ2VuZXJhdGlvbiI6IHsKICAgICAgInN0YXR1cyI6ICJzdWNjZXNzIiwKICAgICAgImRvY3VtZW50X3R5cGUiOiAidW5pdmVyc2FsIiwKICAgICAgImRldGVjdGVkX2xhbmd1YWdlIjogInVua25vd24iLAogICAgICAiZHVyYXRpb25fc2Vjb25kcyI6IDMuMWUtMDUKICAgIH0sCiAgICAiaHRtbF9nZW5lcmF0aW9uIjogewogICAgICAic3RhdHVzIjogInN1Y2Nlc3MiLAogICAgICAiZHVyYXRpb25fc2Vjb25kcyI6IDAuMDAzMzA3CiAgICB9CiAgfSwKICAib3V0cHV0X2ZpbGVzIjogewogICAgImh0bWwiOiAib3V0cHV0L21odG1sX2V4YW1wbGUvSW52b2ljZS0zMDM5MkIzQy0wMDAxL0ludm9pY2UtMzAzOTJCM0MtMDAwMS5odG1sIiwKICAgICJtZXRhZGF0YSI6ICJvdXRwdXQvbWh0bWxfZXhhbXBsZS9JbnZvaWNlLTMwMzkyQjNDLTAwMDEvSW52b2ljZS0zMDM5MkIzQy0wMDAxX21ldGFkYXRhLmpzb24iLAogICAgImxvZyI6ICIvaG9tZS90b20vZ2l0aHViL2Zpbi1vZmZpY2VyL3ZodG1sL291dHB1dC9zaW5nbGVfZG9jdW1lbnQvSW52b2ljZS0zMDM5MkIzQy0wMDAxLmxvZyIKICB9Cn0=
+------=_NextPart_000_0000--
