@@ -451,6 +451,8 @@ def main():
     parser.add_argument("-b", "--batch", help="Tryb wsadowy (przetwarzanie katalogu)", action="store_true")
     parser.add_argument("-v", "--view", help="Otwórz wygenerowany HTML w przeglądarce", action="store_true")
     parser.add_argument("--extractor-service", choices=["invoice", "receipt", "cv", "contract", "financial", "medical", "legal", "tax", "insurance", "education"], help="Zewnętrzna usługa ekstrakcji danych z dokumentu (np. invoice, receipt)")
+    parser.add_argument("--adapter", choices=["invoice", "receipt", "cv", "contract", "financial", "medical", "legal", "tax", "insurance", "education"], help="Użyj adaptera do bezpośredniego połączenia z usługą (pomija gateway)")
+    parser.add_argument("--adapter-port", type=int, help="Port usługi adaptera (np. 8001 dla invoice, 8002 dla receipt)")
     parser.add_argument("--format", choices=["html", "mhtml"], default="html", help="Format wyjściowy: html (jeden plik) lub mhtml (multipart)")
     parser.add_argument("--docker", help="Ścieżka do docker-compose.yml lub katalogu z docker-compose.yml; uruchomi automatycznie wymagane usługi w Dockerze", nargs="?", const=".")
     args = parser.parse_args()
@@ -466,6 +468,16 @@ def main():
             subprocess.run(["docker-compose", "up", "-d"], cwd=docker_dir, check=True)
             print("[vhtml] Czekam na uruchomienie usług (10s)...")
             time.sleep(10)
+        
+        # Użycie adaptera do bezpośredniej usługi na porcie
+        if args.adapter and args.adapter_port:
+            if args.adapter == "invoice":
+                from adapters.invoice_extractor_adapter import InvoiceExtractorAdapter
+                adapter = InvoiceExtractorAdapter(port=args.adapter_port)
+                result = adapter.extract(args.input)
+                print(f"Dane wyekstrahowane przez adapter {args.adapter} (port {args.adapter_port}):\n{result}")
+                return
+            # Analogicznie można dodać kolejne adaptery
         
         if args.batch:
             if not os.path.isdir(args.input):

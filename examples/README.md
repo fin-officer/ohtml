@@ -59,27 +59,34 @@ Dla poniższych przykładów używaj wyłącznie istniejących plików PDF z kat
 - Paragony: Receipt-2914-4703.pdf, Receipt-2003-4795.pdf
 - Transakcje Adobe: Adobe_Transaction_No_2878915736_20240920.pdf
 
+### Sposób 1: Przez gateway (`docker-compose` w katalogu głównym projektu)
+
 ```bash
 # Ekstrakcja faktury przez Invoice Extractor (MHTML)
-poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --docker ../ścieżka/do/docker-compose/ --extractor-service invoice --format mhtml -o output/examples/invoice_mhtml
+poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --docker ../../ --extractor-service invoice --format mhtml -o output/examples/invoice_mhtml
 
 # Ekstrakcja kolejnej faktury
-poetry run python -m vhtml.main invoices/Invoice-34967F04-0002.pdf --docker ../ścieżka/do/docker-compose/ --extractor-service invoice --format html -o output/examples/invoice_html
+poetry run python -m vhtml.main invoices/Invoice-34967F04-0002.pdf --docker ../../ --extractor-service invoice --format html -o output/examples/invoice_html
 
 # Ekstrakcja paragonu przez Receipt Analyzer
-poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf --docker ../ścieżka/do/docker-compose/ --extractor-service receipt --format html -o output/examples/receipt_html
+poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf --docker ../../ --extractor-service receipt --format html -o output/examples/receipt_html
 
 # Ekstrakcja kolejnego paragonu
-poetry run python -m vhtml.main invoices/Receipt-2003-4795.pdf --docker ../ścieżka/do/docker-compose/ --extractor-service receipt --format mhtml -o output/examples/receipt_mhtml
+poetry run python -m vhtml.main invoices/Receipt-2003-4795.pdf --docker ../../ --extractor-service receipt --format mhtml -o output/examples/receipt_mhtml
 
 # Ekstrakcja transakcji Adobe przez Invoice Extractor
-poetry run python -m vhtml.main invoices/Adobe_Transaction_No_2878915736_20240920.pdf --docker ../ścieżka/do/docker-compose/ --extractor-service invoice --format html -o output/examples/adobe_invoice_html
+poetry run python -m vhtml.main invoices/Adobe_Transaction_No_2878915736_20240920.pdf --docker ../../ --extractor-service invoice --format html -o output/examples/adobe_invoice_html
 ```
 
-### Co robi parametr --docker?
-- Automatycznie uruchamia `docker-compose up -d` w katalogu z docker-compose.yml.
-- Czeka 10 sekund na start usług.
-- Następnie wykonuje ekstrakcję przez wybraną usługę.
+### Sposób 2: Bezpośrednio do usługi (adapter, port)
+
+```bash
+# Ekstrakcja faktury bezpośrednio przez adapter (port 8001)
+poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --adapter invoice --adapter-port 8001
+
+# Ekstrakcja paragonu przez adapter (port 8002)
+poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf --adapter receipt --adapter-port 8002
+```
 
 ---
 
