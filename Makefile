@@ -3,7 +3,7 @@
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  setup       - Set up development environment (Python venv + dependencies)"
+	@echo "  setup       - Set up development environment with Poetry"
 	@echo "  install     - Install production dependencies"
 	@echo "  install-dev - Install development dependencies"
 	@echo "  test        - Run tests"
@@ -18,52 +18,43 @@ help:
 
 # Setup and Installation
 setup:
-	@echo "Setting up development environment..."
-	chmod +x scripts/setup_environment.sh
-	./scripts/setup_environment.sh
+	@echo "Setting up development environment with Poetry..."
+	@if ! command -v poetry &> /dev/null; then \
+		echo "Poetry not found. Installing..."; \
+		curl -sSL https://install.python-poetry.org | python3 -; \
+	fi
+	poetry install
+	@echo "Installing system dependencies..."
+	chmod +x scripts/install_dependencies.sh
+	./scripts/install_dependencies.sh
 
 # Installation
-install: venv
-	@echo "Installing production dependencies..."
-	. venv/bin/activate && pip install -r requirements.txt
+install:
+	@echo "Installing production dependencies with Poetry..."
+	poetry install --no-dev
 
-install-dev: venv
-	@echo "Installing development dependencies..."
-	. venv/bin/activate && \
-	pip install -r requirements.txt -r requirements-dev.txt && \
-	pre-commit install
-
-venv:
-	@if [ ! -d "venv" ]; then \
-		echo "Virtual environment not found. Running setup..."; \
-		$(MAKE) setup; \
-	fi
-
-# Check if Tesseract is installed
-tesseract-check:
-	@if ! command -v tesseract &> /dev/null; then \
-		echo "Tesseract is not installed. Installing..."; \
-		chmod +x scripts/install_tesseract.sh; \
-		./scripts/install_tesseract.sh; \
-	fi
+install-dev:
+	@echo "Installing development dependencies with Poetry..."
+	poetry install
+	poetry run pre-commit install
 
 # Testing
 test:
-	pytest tests/ -v
+	poetry run pytest tests/ -v
 
 test-cov:
-	pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	poetry run pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
 # Code quality
 lint:
-	flake8 src/ tests/
-	mypy src/
-	black --check src/ tests/
-	isort --check-only src/ tests/
+	poetry run flake8 src/ tests/
+	poetry run mypy src/
+	poetry run black --check src/ tests/
+	poetry run isort --check-only src/ tests/
 
 format:
-	black src/ tests/
-	isort src/ tests/
+	poetry run black src/ tests/
+	poetry run isort src/ tests/
 
 # Cleanup
 clean:
@@ -82,8 +73,7 @@ publish: build
 	poetry publish
 
 run:
-	python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-
+	poetry run python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Docker commands
 docker-build:
@@ -105,12 +95,12 @@ setup:
 
 # Download models
 download-models:
-	python scripts/download_models.py
+	poetry run python scripts/download_models.py
 
 # Validate installation
 validate:
-	python scripts/validate_installation.py
+	poetry run python scripts/validate_installation.py
 
 # Run benchmarks
 benchmark:
-	python scripts/benchmark.py
+	poetry run python scripts/benchmark.py
