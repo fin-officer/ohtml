@@ -318,7 +318,7 @@ class DocumentAnalyzer:
         """
         Analizuje formatowanie tekstu
         
-{{ ... }}
+        Args:
             text: Tekst do analizy
             
         Returns:
@@ -474,11 +474,40 @@ def main():
             if args.adapter == "invoice":
                 from adapters.invoice_extractor_adapter import InvoiceExtractorAdapter
                 adapter = InvoiceExtractorAdapter(port=args.adapter_port)
-                result = adapter.extract(args.input)
-                print(f"Dane wyekstrahowane przez adapter {args.adapter} (port {args.adapter_port}):\n{result}")
-                return
-            # Analogicznie można dodać kolejne adaptery
+            elif args.adapter == "receipt":
+                from adapters.receipt_analyzer_adapter import ReceiptAnalyzerAdapter
+                adapter = ReceiptAnalyzerAdapter(port=args.adapter_port)
+            elif args.adapter == "cv":
+                from adapters.cv_parser_adapter import CVParserAdapter
+                adapter = CVParserAdapter(port=args.adapter_port)
+            elif args.adapter == "contract":
+                from adapters.contract_analyzer_adapter import ContractAnalyzerAdapter
+                adapter = ContractAnalyzerAdapter(port=args.adapter_port)
+            elif args.adapter == "financial":
+                from adapters.financial_statement_adapter import FinancialStatementAdapter
+                adapter = FinancialStatementAdapter(port=args.adapter_port)
+            elif args.adapter == "medical":
+                from adapters.medical_records_adapter import MedicalRecordsAdapter
+                adapter = MedicalRecordsAdapter(port=args.adapter_port)
+            elif args.adapter == "legal":
+                from adapters.legal_documents_adapter import LegalDocumentsAdapter
+                adapter = LegalDocumentsAdapter(port=args.adapter_port)
+            elif args.adapter == "tax":
+                from adapters.tax_forms_adapter import TaxFormsAdapter
+                adapter = TaxFormsAdapter(port=args.adapter_port)
+            elif args.adapter == "insurance":
+                from adapters.insurance_claims_adapter import InsuranceClaimsAdapter
+                adapter = InsuranceClaimsAdapter(port=args.adapter_port)
+            elif args.adapter == "education":
+                from adapters.educational_transcripts_adapter import EducationalTranscriptsAdapter
+                adapter = EducationalTranscriptsAdapter(port=args.adapter_port)
+            else:
+                raise ValueError(f"Nieznany adapter: {args.adapter}")
+            result = adapter.extract(args.input)
+            print(f"Dane wyekstrahowane przez adapter {args.adapter} (port {args.adapter_port}):\n{result}")
+            return
         
+        # Pozostała logika CLI
         if args.batch:
             if not os.path.isdir(args.input):
                 print(f"Błąd: {args.input} nie jest katalogiem")

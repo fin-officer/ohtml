@@ -86,6 +86,30 @@ poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --adapter inv
 
 # Ekstrakcja paragonu przez adapter (port 8002)
 poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf --adapter receipt --adapter-port 8002
+
+# Ekstrakcja CV przez adapter (port 8003)
+poetry run python -m vhtml.main invoices/Invoice-30392B3C-0002.pdf --adapter cv --adapter-port 8003
+
+# Ekstrakcja kontraktu przez adapter (port 8004)
+poetry run python -m vhtml.main invoices/Invoice-34967F04-0002.pdf --adapter contract --adapter-port 8004
+
+# Ekstrakcja sprawozdania finansowego przez adapter (port 8005)
+poetry run python -m vhtml.main invoices/Adobe_Transaction_No_2878915736_20240920.pdf --adapter financial --adapter-port 8005
+
+# Ekstrakcja dokumentacji medycznej przez adapter (port 8006)
+poetry run python -m vhtml.main invoices/Invoice-AF90A26A-0005.pdf --adapter medical --adapter-port 8006
+
+# Ekstrakcja dokumentów prawnych przez adapter (port 8007)
+poetry run python -m vhtml.main invoices/Invoice-9BDC34D5-0001.pdf --adapter legal --adapter-port 8007
+
+# Ekstrakcja formularza podatkowego przez adapter (port 8008)
+poetry run python -m vhtml.main invoices/Invoice-9BDC34D5-0002.pdf --adapter tax --adapter-port 8008
+
+# Ekstrakcja roszczenia ubezpieczeniowego przez adapter (port 8009)
+poetry run python -m vhtml.main invoices/Invoice-9BDC34D5-0003.pdf --adapter insurance --adapter-port 8009
+
+# Ekstrakcja świadectwa edukacyjnego przez adapter (port 8010)
+poetry run python -m vhtml.main invoices/Invoice-34967F04-0001.pdf --adapter education --adapter-port 8010
 ```
 
 ---
