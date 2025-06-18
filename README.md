@@ -94,6 +94,35 @@ html_path = analyzer.analyze_document("document.pdf", "output_dir")
 print(f"Generated HTML: {html_path}")
 ```
 
+## Examples
+
+### Generate Standalone HTML
+
+Generate a standalone HTML file with all images, JS, and JSON embedded:
+
+```bash
+poetry run python examples/pdf2html.py
+```
+
+- Input: Folder with HTML, images, JS, and JSON (e.g., output/mhtml_example/Invoice-30392B3C-0001)
+- Output: Standalone HTML (e.g., output/html_example/Invoice-30392B3C-0001_standalone.html)
+
+### Generate MHTML (Web Archive)
+
+Generate a fully self-contained MHTML file for browser archiving:
+
+```bash
+poetry run python examples/pdf2mhtml.py
+```
+
+- Input: PDF(s) in invoices/ (or other test files)
+- Output: MHTML file (e.g., output/mhtml_example/Invoice-30392B3C-0001.mhtml)
+
+---
+
+- See `examples/html.py` and `examples/mhtml.py` for usage patterns and batch processing.
+- Both scripts demonstrate how to use the vHTML API for document conversion and archiving.
+
 ## Core Components
 
 - **PDFProcessor**: Handles PDF to image conversion and preprocessing

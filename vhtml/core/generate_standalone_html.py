@@ -26,7 +26,7 @@ def embed_images_in_html(html: str, folder: Path) -> str:
 
     return str(soup)
 
-def generate_standalone_html(folder_path: str, output_file: str):
+def create_standalone_html(folder_path: str, output_file: str):
     folder = Path(folder_path)
     html_file = next(folder.glob("*.html"))
     json_file = next(folder.glob("*.json"))
@@ -71,4 +71,4 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", default="output.html", help="Plik wynikowy (HTML)")
 
     args = parser.parse_args()
-    generate_standalone_html(args.folder, args.output)
+    create_standalone_html(args.folder, args.output)

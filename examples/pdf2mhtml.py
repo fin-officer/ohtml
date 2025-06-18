@@ -57,7 +57,9 @@ def process_single_document():
         traceback.print_exc()
 
 def process_multiple_documents():
-    """Example of processing multiple PDF documents."""
+    """Example of processing multiple PDF documents with detailed logging."""
+    import logging
+    import traceback
     print_header("EXAMPLE 2: PROCESS MULTIPLE DOCUMENTS")
     
     # Initialize the advanced analyzer
@@ -80,7 +82,22 @@ def process_multiple_documents():
     
     # Process all PDFs in the input directory
     start_time = datetime.now()
-    results = analyzer.batch_analyze(input_dir, output_dir)
+    results = {}
+    for pdf_file in pdf_files:
+        print(f"\n---\nProcessing: {pdf_file}")
+        try:
+            html_path = analyzer.analyze_document(str(pdf_file), output_dir)
+            print(f"✅ Success: {pdf_file} → {html_path}")
+            results[str(pdf_file)] = {"status": "success", "html_path": html_path}
+        except Exception as e:
+            print(f"❌ Error processing {pdf_file}: {e}")
+            traceback.print_exc()
+            # Log error to a file for later review
+            error_log_path = os.path.join(output_dir, f"{Path(pdf_file).stem}_error.log")
+            with open(error_log_path, "w", encoding="utf-8") as errf:
+                errf.write(f"Exception for {pdf_file}: {e}\n")
+                errf.write(traceback.format_exc())
+            results[str(pdf_file)] = {"status": "error", "error": str(e)}
     processing_time = (datetime.now() - start_time).total_seconds()
     
     # Print summary
@@ -101,6 +118,9 @@ def process_multiple_documents():
         print(f"{status} {os.path.basename(pdf_file)}: {result['status']}")
         if 'html_path' in result and result['status'] == 'success':
             print(f"   → {os.path.abspath(result['html_path'])}")
+        if 'error' in result:
+            print(f"   Error: {result['error']}")
+            print(f"   See log: {os.path.join(output_dir, Path(pdf_file).stem + '_error.log')}")
 
 def custom_processing():
     """Example of custom processing with advanced options."""

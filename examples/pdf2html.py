@@ -3,7 +3,7 @@ Example of generating standalone HTML with embedded images, JS, and JSON using v
 """
 import os
 from pathlib import Path
-from vhtml.core.generate_standalone_html import generate_standalone_html
+from vhtml.core.generate_standalone_html import create_standalone_html
 
 def print_header(title):
     print("\n" + "=" * 80)
@@ -17,7 +17,7 @@ def standalone_html_example():
     os.makedirs(os.path.dirname(output_html), exist_ok=True)
     print(f"Generating standalone HTML from: {input_pdf_folder}")
     try:
-        generate_standalone_html(input_pdf_folder, output_html)
+        create_standalone_html(input_pdf_folder, output_html)
         print(f"✅ Standalone HTML generated: {os.path.abspath(output_html)}")
     except Exception as e:
         print(f"❌ Error: {e}")
