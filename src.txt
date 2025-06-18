@@ -1,0 +1,20 @@
+pdf_analyzer/
+├── src/
+│   ├── core/
+│   │   ├── pdf_processor.py
+│   │   ├── layout_analyzer.py
+│   │   ├── ocr_engine.py
+│   │   └── html_generator.py
+│   ├── templates/
+│   │   ├── invoice_template.html
+│   │   ├── form_template.html
+│   │   └── universal_template.html
+│   ├── models/
+│   │   └── document_classifier.py
+│   └── utils/
+│       ├── image_utils.py
+│       └── text_utils.py
+├── tests/
+├── examples/
+├── requirements.txt
+└── main.py
