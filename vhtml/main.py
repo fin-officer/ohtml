@@ -455,6 +455,7 @@ def main():
     parser.add_argument("--adapter-port", type=int, help="Port usługi adaptera (np. 8001 dla invoice, 8002 dla receipt)")
     parser.add_argument("--format", choices=["html", "mhtml"], default="html", help="Format wyjściowy: html (jeden plik) lub mhtml (multipart)")
     parser.add_argument("--docker", help="Ścieżka do docker-compose.yml lub katalogu z docker-compose.yml; uruchomi automatycznie wymagane usługi w Dockerze", nargs="?", const=".")
+    parser.add_argument("--dockerfile", help="Ścieżka do Dockerfile konkretnej usługi; uruchomi pojedynczy kontener dla tej usługi", nargs="?")
     args = parser.parse_args()
     
     try:
@@ -467,6 +468,21 @@ def main():
             print(f"[vhtml] Uruchamiam docker-compose w katalogu: {docker_dir}")
             subprocess.run(["docker-compose", "up", "-d"], cwd=docker_dir, check=True)
             print("[vhtml] Czekam na uruchomienie usług (10s)...")
+            time.sleep(10)
+        # Uruchomienie pojedynczego kontenera jeśli podano --dockerfile
+        elif args.dockerfile:
+            import subprocess
+            import time
+            import os
+            dockerfile_path = args.dockerfile
+            service_name = os.path.basename(os.path.dirname(dockerfile_path))
+            image_tag = f"{service_name}:local"
+            build_dir = os.path.dirname(dockerfile_path)
+            print(f"[vhtml] Buduję obraz Dockera: {image_tag} z {dockerfile_path}")
+            subprocess.run(["docker", "build", "-t", image_tag, "-f", dockerfile_path, build_dir], check=True)
+            print(f"[vhtml] Uruchamiam kontener {service_name} na porcie domyślnym...")
+            subprocess.run(["docker", "run", "-d", "-p", "8001:8001", "--name", service_name, image_tag], check=True)
+            print("[vhtml] Czekam na uruchomienie usługi (10s)...")
             time.sleep(10)
         
         # Użycie adaptera do bezpośredniej usługi na porcie

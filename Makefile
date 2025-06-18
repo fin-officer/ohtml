@@ -99,3 +99,24 @@ validate:
 # Run benchmarks
 benchmark:
 	poetry run python scripts/benchmark.py
+
+# === TESTY INTEGRACYJNE USŁUG EKSTRAKCJI ===
+
+test-gateway:
+	poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --docker ../../ --extractor-service invoice --format mhtml -o output/examples/invoice_mhtml
+
+test-adapter:
+	poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --adapter invoice --adapter-port 8001
+
+test-dockerfile:
+	poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf \
+		--dockerfile ./services/01-invoice-extractor/Dockerfile \
+		--adapter invoice --adapter-port 8001
+
+# Batch test wszystkich adapterów (jeśli porty i pliki są dostępne)
+test-adapter-all:
+	poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf --adapter invoice --adapter-port 8001
+	poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf --adapter receipt --adapter-port 8002
+	poetry run python -m vhtml.main invoices/Invoice-30392B3C-0002.pdf --adapter cv --adapter-port 8003
+	poetry run python -m vhtml.main invoices/Invoice-34967F04-0002.pdf --adapter contract --adapter-port 8004
+	poetry run python -m vhtml.main invoices/Adobe_Transaction_No_2878915736_20240920.pdf --adapter financial --adapter-port 8005

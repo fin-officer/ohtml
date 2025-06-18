@@ -112,6 +112,23 @@ poetry run python -m vhtml.main invoices/Invoice-9BDC34D5-0003.pdf --adapter ins
 poetry run python -m vhtml.main invoices/Invoice-34967F04-0001.pdf --adapter education --adapter-port 8010
 ```
 
+### Sposób 3: Pojedynczy kontener przez Dockerfile (`--dockerfile`)
+
+```bash
+# Ekstrakcja faktury przez adapter, uruchamiając tylko usługę invoice-extractor
+poetry run python -m vhtml.main invoices/Invoice-30392B3C-0001.pdf \
+  --dockerfile ./services/01-invoice-extractor/Dockerfile \
+  --adapter invoice --adapter-port 8001
+
+# Ekstrakcja paragonu przez adapter, uruchamiając tylko usługę receipt-analyzer
+poetry run python -m vhtml.main invoices/Receipt-2914-4703.pdf \
+  --dockerfile ./services/02-receipt-analyzer/Dockerfile \
+  --adapter receipt --adapter-port 8002
+```
+
+- Możesz analogicznie użyć innych Dockerfile z katalogu `services/` i odpowiednich portów/adapterów.
+- vhtml automatycznie zbuduje obraz i uruchomi kontener na domyślnym porcie usługi.
+
 ---
 
 ## 6. Automatyczne testowanie dockerów tylko dla istniejących plików
