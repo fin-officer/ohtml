@@ -11,6 +11,7 @@ from pdf2image import convert_from_path
 from PIL import Image, ImageDraw
 import json
 import os
+import logging
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple, Optional
 from langdetect import detect
@@ -18,6 +19,9 @@ import re
 from jinja2 import Template
 import base64
 from io import BytesIO
+
+# Configure logging
+logger = logging.getLogger('vhtml.layout_analyzer')
 
 
 @dataclass
@@ -64,11 +68,13 @@ class PDFProcessor:
 
     def pdf_to_images(self, pdf_path: str) -> List[Image.Image]:
         """Konwertuje PDF do listy obrazów"""
+        logger.info(f"Rozpoczynanie konwersji pliku PDF: {pdf_path}")
         try:
             images = convert_from_path(pdf_path, dpi=self.dpi)
+            logger.info(f"Pomyślnie przekonwertowano {len(images)} stron z pliku {os.path.basename(pdf_path)}")
             return images
         except Exception as e:
-            print(f"Błąd konwersji PDF: {e}")
+            logger.error(f"Błąd podczas konwersji pliku PDF {pdf_path}: {str(e)}", exc_info=True)
             return []
 
 
@@ -76,28 +82,44 @@ class LayoutAnalyzer:
     """Analizator układu dokumentu wykorzystujący OpenCV"""
 
     def __init__(self):
+        self.logger = logging.getLogger('vhtml.layout_analyzer')
         self.min_contour_area = 1000
         self.block_templates = {
             'invoice': self._get_invoice_template(),
             '6-column': self._get_6_column_template(),
             'universal': self._get_universal_template()
         }
+        self.logger.debug("Zainicjalizowano LayoutAnalyzer z szablonami: %s", 
+                         list(self.block_templates.keys()))
 
     def analyze_layout(self, image: Image.Image) -> Tuple[str, List[Dict]]:
         """Analizuje układ dokumentu i zwraca typ oraz bloki"""
-        cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        self.logger.info("Rozpoczynanie analizy układu dokumentu")
+        try:
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            self.logger.debug("Przekonwertowano obraz do formatu OpenCV")
 
-        # Preprocessing
-        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-        denoised = cv2.fastNlMeansDenoising(gray)
+            # Preprocessing
+            self.logger.debug("Przetwarzanie wstępne obrazu")
+            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            denoised = cv2.fastNlMeansDenoising(gray)
+            self.logger.debug("Zakończono przetwarzanie wstępne obrazu")
 
-        # Wykrywanie bloków tekstu
-        blocks = self._detect_text_blocks(denoised)
+            # Wykrywanie bloków tekstu
+            self.logger.debug("Wykrywanie bloków tekstu")
+            blocks = self._detect_text_blocks(denoised)
+            self.logger.info(f"Wykryto {len(blocks)} bloków tekstu")
 
-        # Klasyfikacja układu
-        layout_type = self._classify_layout(blocks, image.size)
+            # Klasyfikacja układu
+            self.logger.debug("Klasyfikacja układu dokumentu")
+            layout_type = self._classify_layout(blocks, image.size)
+            self.logger.info(f"Zidentyfikowano typ układu: {layout_type}")
 
-        return layout_type, blocks
+            return layout_type, blocks
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas analizy układu dokumentu: {str(e)}", exc_info=True)
+            raise
 
     def _detect_text_blocks(self, gray_image) -> List[Dict]:
         """Wykrywa bloki tekstu używając OpenCV"""
