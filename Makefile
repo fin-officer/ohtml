@@ -1,8 +1,9 @@
-.PHONY: help install install-dev test test-cov lint format clean build run docker-build docker-run publish
+.PHONY: help setup install install-dev test test-cov lint format clean build run docker-build docker-run publish
 
 # Default target
 help:
 	@echo "Available commands:"
+	@echo "  setup       - Set up development environment (Python venv + dependencies)"
 	@echo "  install     - Install production dependencies"
 	@echo "  install-dev - Install development dependencies"
 	@echo "  test        - Run tests"
@@ -15,13 +16,36 @@ help:
 	@echo "  docker-build - Build Docker image"
 	@echo "  docker-run  - Run Docker container"
 
-# Installation
-install:
-	pip install -r requirements.txt
+# Setup and Installation
+setup:
+	@echo "Setting up development environment..."
+	chmod +x scripts/setup_environment.sh
+	./scripts/setup_environment.sh
 
-install-dev:
-	pip install -r requirements.txt -r requirements-dev.txt
+# Installation
+install: venv
+	@echo "Installing production dependencies..."
+	. venv/bin/activate && pip install -r requirements.txt
+
+install-dev: venv
+	@echo "Installing development dependencies..."
+	. venv/bin/activate && \
+	pip install -r requirements.txt -r requirements-dev.txt && \
 	pre-commit install
+
+venv:
+	@if [ ! -d "venv" ]; then \
+		echo "Virtual environment not found. Running setup..."; \
+		$(MAKE) setup; \
+	fi
+
+# Check if Tesseract is installed
+tesseract-check:
+	@if ! command -v tesseract &> /dev/null; then \
+		echo "Tesseract is not installed. Installing..."; \
+		chmod +x scripts/install_tesseract.sh; \
+		./scripts/install_tesseract.sh; \
+	fi
 
 # Testing
 test:
@@ -60,12 +84,6 @@ publish: build
 run:
 	python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Publishing
-publish:
-	@echo "Building package..."
-	poetry build
-	@echo "\nTo upload to PyPI, run:"
-	@echo "poetry publish"
 
 # Docker commands
 docker-build:
