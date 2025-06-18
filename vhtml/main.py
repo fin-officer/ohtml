@@ -155,17 +155,21 @@ class DocumentAnalyzer:
             # Calculate average confidence
             avg_confidence = sum(block.confidence for block in document_blocks) / len(document_blocks) if document_blocks else 0
             
+            # Create pages structure
+            pages = [{
+                'number': i+1,
+                'blocks': [block.to_dict() for block in document_blocks]
+            } for i in range(len(images))]
+            
             metadata = DocumentMetadata(
                 doc_type=doc_type,
                 language=doc_language,
                 layout=layout_type,
                 confidence=avg_confidence,
-                pages=[{
-                    'number': i+1,
-                    'blocks': [block.to_dict() for block in document_blocks]
-                } for i in range(len(images))],
+                pages=pages,
                 source_file=os.path.basename(pdf_path),
-                processing_time=0  # Will be updated after processing
+                processing_time=0,  # Will be updated after processing
+                blocks=document_blocks  # Pass the blocks directly
             )
             
             processing_steps['metadata_generation'] = {
@@ -205,7 +209,7 @@ class DocumentAnalyzer:
             # Save metadata
             metadata_path = os.path.join(doc_output_dir, f"{doc_name}_metadata.json")
             with open(metadata_path, 'w', encoding='utf-8') as f:
-                f.write(metadata.to_json(indent=2))
+                json.dump(metadata.to_dict(), f, indent=2, ensure_ascii=False)
             
             # Calculate total processing time
             total_time = (datetime.now() - start_time).total_seconds()
@@ -215,7 +219,7 @@ class DocumentAnalyzer:
             
             # Save updated metadata
             with open(metadata_path, 'w', encoding='utf-8') as f:
-                f.write(metadata.to_json(indent=2))
+                json.dump(metadata.to_dict(), f, indent=2, ensure_ascii=False)
             
             # Save processing log
             log_data = {

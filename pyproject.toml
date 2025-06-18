@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "vhtml"
-version = "0.2.0"
+version = "0.2.1"
 description = "vhtml (ang. Visual HyperText Markup Language) - Optical character recognition and HTML layout analysis library"
 authors = ["Tom Sapletta"]
 readme = "README.md"
@@ -33,6 +33,7 @@ tqdm = "^4.66.1"
 requests = "^2.31.0"
 matplotlib = "^3.7.2"
 seaborn = "^0.12.2"
+beautifulsoup4 = "^4.13.4"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.2"

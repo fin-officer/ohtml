@@ -1,11 +1,13 @@
 """
-Examples of using the vHTML library to process PDF documents.
+Examples of using the vHTML library to process PDF documents and generate MHTML.
 """
 import os
 import json
+import shutil
 from pathlib import Path
 from datetime import datetime
 from vhtml.main import DocumentAnalyzer, AdvancedAnalyzer
+from vhtml.core.generate_mhtml import generate_mhtml
 
 def print_header(title):
     """Print a formatted header."""
@@ -130,6 +132,51 @@ def custom_processing():
         import traceback
         traceback.print_exc()
 
+def generate_mhtml_example():
+    """Example of generating MHTML from processed documents."""
+    print_header("EXAMPLE 4: GENERATE MHTML")
+    
+    # Initialize the analyzer
+    analyzer = DocumentAnalyzer()
+    
+    # Input and output paths
+    input_pdf = "invoices/Invoice-30392B3C-0001.pdf"
+    output_dir = "output/mhtml_example"
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"Processing: {input_pdf}")
+    
+    try:
+        # Process the document
+        start_time = datetime.now()
+        html_path = analyzer.analyze_document(input_pdf, output_dir)
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        print(f"✅ Successfully processed in {processing_time:.2f} seconds")
+        
+        # Get the output directory containing the processed files
+        output_folder = os.path.dirname(html_path)
+        base_name = os.path.splitext(os.path.basename(html_path))[0]
+        
+        # Generate MHTML
+        mhtml_path = os.path.join(output_dir, f"{base_name}.mhtml")
+        print(f"\n🔧 Generating MHTML file...")
+        
+        if generate_mhtml(output_folder, mhtml_path):
+            print(f"✅ Successfully generated MHTML: {os.path.abspath(mhtml_path)}")
+            
+            # Also create a copy with the requested name format
+            simple_mhtml = "faktura-123.mhtml"
+            shutil.copy2(mhtml_path, simple_mhtml)
+            print(f"📦 Created copy as: {os.path.abspath(simple_mhtml)}")
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+
 def main():
     """Run all examples."""
     print("\n" + "=" * 80)
@@ -141,6 +188,7 @@ def main():
     process_single_document()
     process_multiple_documents()
     custom_processing()
+    generate_mhtml_example()
     
     print("\n" + "=" * 80)
     print(f"{'EXAMPLES COMPLETED':^80}")

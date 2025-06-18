@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 import json
 import os
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Tuple, Optional
 from langdetect import detect
 import re
@@ -57,7 +57,46 @@ class DocumentMetadata:
     language: str
     layout: str  # 4-block, 6-block, custom
     confidence: float
-    blocks: List[Block]
+    blocks: List[Block] = None
+    pages: List[Dict] = None
+    source_file: str = ""
+    processing_time: float = 0.0
+    
+    def __post_init__(self):
+        """Inicjalizacja pól po utworzeniu obiektu"""
+        # Initialize blocks if not provided
+        if self.blocks is None:
+            self.blocks = []
+            
+        # Initialize pages if not provided
+        if self.pages is None:
+            self.pages = []
+            
+        # If pages is empty but we have blocks, create default page structure
+        if not self.pages and self.blocks:
+            self.pages = [{
+                'number': 1,
+                'blocks': [block.to_dict() for block in self.blocks]
+            }]
+        # If blocks is empty but we have pages, extract blocks from pages
+        elif not self.blocks and self.pages:
+            # This is a simplified approach - in a real scenario, you'd need to convert
+            # the dicts back to Block objects, but for now we'll just use an empty list
+            self.blocks = []
+            
+    def to_dict(self):
+        """Convert the metadata to a dictionary"""
+        return {
+            'doc_type': self.doc_type,
+            'language': self.language,
+            'layout': self.layout,
+            'confidence': self.confidence,
+            'source_file': self.source_file,
+            'processing_time': self.processing_time,
+            'pages': self.pages,
+            'blocks': [block.to_dict() if hasattr(block, 'to_dict') else block 
+                      for block in self.blocks]
+        }
 
 
 class PDFProcessor:
@@ -66,16 +105,36 @@ class PDFProcessor:
     def __init__(self, dpi=300):
         self.dpi = dpi
 
-    def pdf_to_images(self, pdf_path: str) -> List[Image.Image]:
-        """Konwertuje PDF do listy obrazów"""
-        logger.info(f"Rozpoczynanie konwersji pliku PDF: {pdf_path}")
+    def pdf_to_images(self, pdf_path: str, output_dir: str) -> List[str]:
+        """Konwertuje plik PDF na obrazy PNG"""
         try:
-            images = convert_from_path(pdf_path, dpi=self.dpi)
-            logger.info(f"Pomyślnie przekonwertowano {len(images)} stron z pliku {os.path.basename(pdf_path)}")
-            return images
+            # Create output directory if it doesn't exist
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Convert PDF to images
+            images = convert_from_path(
+                pdf_path,
+                dpi=self.dpi,
+                fmt='png',
+                output_folder=output_dir,
+                output_file=os.path.splitext(os.path.basename(pdf_path))[0]
+            )
+            
+            # Save images as PNG
+            image_paths = []
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            
+            for i, image in enumerate(images):
+                image_path = os.path.join(output_dir, f"{base_name}_page_{i+1:03d}.png")
+                image.save(image_path, 'PNG', quality=100)
+                image_paths.append(image_path)
+            
+            logger.info(f"Saved {len(image_paths)} PNG images to {output_dir}")
+            return image_paths
+            
         except Exception as e:
-            logger.error(f"Błąd podczas konwersji pliku PDF {pdf_path}: {str(e)}", exc_info=True)
-            return []
+            logger.error(f"Błąd podczas konwersji PDF na obrazy: {e}", exc_info=True)
+            raise
 
 
 class LayoutAnalyzer:
@@ -123,49 +182,77 @@ class LayoutAnalyzer:
 
     def _detect_text_blocks(self, gray_image) -> List[Dict]:
         """Wykrywa bloki tekstu używając OpenCV"""
-        # Morfologia do łączenia bliskich elementów tekstu
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 10))
-        dilated = cv2.dilate(gray_image, kernel, iterations=2)
+        self.logger.debug("Rozpoczynanie wykrywania bloków tekstu")
+        try:
+            # Morfologia do łączenia bliskich elementów tekstu
+            self.logger.debug("Stosowanie operacji morfologicznych do łączenia elementów tekstu")
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 10))
+            dilated = cv2.dilate(gray_image, kernel, iterations=2)
 
-        # Threshold i inwersja
-        _, thresh = cv2.threshold(dilated, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            # Threshold i inwersja
+            self.logger.debug("Binaryzacja obrazu")
+            _, thresh = cv2.threshold(dilated, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # Znajdź kontury
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Znajdź kontury
+            self.logger.debug("Wyszukiwanie konturów")
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            self.logger.debug(f"Znaleziono {len(contours)} konturów")
 
-        blocks = []
-        for i, contour in enumerate(contours):
-            area = cv2.contourArea(contour)
-            if area > self.min_contour_area:
+            blocks = []
+            valid_contours = 0
+            self.logger.debug(f"Przetwarzanie konturów (min. obszar: {self.min_contour_area} pikseli)")
+            
+            for i, contour in enumerate(contours):
+                area = cv2.contourArea(contour)
+                # Filtruj małe kontury
+                if area < self.min_contour_area:
+                    self.logger.debug(f"Pominięto kontur {i}: zbyt mały obszar ({area:.0f} < {self.min_contour_area})")
+                    continue
+                    
+                # Pobierz współrzędne prostokąta
                 x, y, w, h = cv2.boundingRect(contour)
+                valid_contours += 1
+                
+                # Dodaj blok
                 blocks.append({
                     'id': f'block_{i}',
-                    'position': {'x': x, 'y': y, 'width': w, 'height': h},
+                    'position': {
+                        'x': x,
+                        'y': y,
+                        'width': w,
+                        'height': h
+                    },
                     'area': area
                 })
+                self.logger.debug(f"Dodano blok {i}: x={x}, y={y}, w={w}, h={h}, area={area:.0f}")
+                
+            self.logger.info(f"Zidentyfikowano {valid_contours} poprawnych bloków tekstu")
+            return blocks
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas wykrywania bloków tekstu: {str(e)}", exc_info=True)
+            raise
 
-        # Sortuj bloki według pozycji (góra-dół, lewo-prawo)
-        blocks.sort(key=lambda b: (b['position']['y'], b['position']['x']))
-
-        return blocks
-
-    def _classify_layout(self, blocks: List[Dict], image_size: Tuple[int, int]) -> str:
-        """Klasyfikuje typ układu dokumentu"""
-        num_blocks = len(blocks)
-        width, height = image_size
-
-        if num_blocks == 4:
-            # Sprawdź czy to układ faktury
-            top_blocks = [b for b in blocks if b['position']['y'] < height * 0.3]
-            if len(top_blocks) == 2:
-                return 'invoice'
-
-        elif num_blocks == 6:
-            # Sprawdź czy to układ 6-kolumnowy
-            rows = self._group_blocks_by_rows(blocks, height)
-            if len(rows) == 3 and all(len(row) == 2 for row in rows):
-                return '6-column'
-
+    def _classify_layout(self, blocks: List[Dict], page_size: Tuple[int, int]) -> str:
+        """Klasyfikuje układ dokumentu na podstawie wykrytych bloków"""
+        self.logger.debug("Rozpoczynanie klasyfikacji układu dokumentu")
+        
+        if not blocks:
+            self.logger.warning("Brak bloków do analizy - zwracam 'unknown'")
+            return 'unknown'
+            
+        # Prosta heurystyka do klasyfikacji układu
+        if len(blocks) >= 6:
+            self.logger.debug(f"Wykryto układ '6-column' na podstawie liczby bloków ({len(blocks)})")
+            return '6-column'
+            
+        # Sprawdź czy którykolwiek z bloków to tabela
+        table_blocks = [b for b in blocks if b.get('type') == 'table']
+        if table_blocks:
+            self.logger.debug(f"Wykryto układ 'invoice' na podstawie obecności {len(table_blocks)} tabel")
+            return 'invoice'
+            
+        self.logger.debug("Wykorzystano domyślny układ 'universal'")
         return 'universal'
 
     def _group_blocks_by_rows(self, blocks: List[Dict], image_height: int) -> List[List[Dict]]:
@@ -213,94 +300,165 @@ class LayoutAnalyzer:
 
 class OCREngine:
     """Silnik OCR z rozpoznawaniem języka"""
-
+    
     def __init__(self):
+        self.logger = logging.getLogger('vhtml.ocr_engine')
         self.languages = {
             'pl': 'pol',
             'en': 'eng',
             'de': 'deu'
         }
+        self.logger.debug("Zainicjalizowano silnik OCR z obsługą języków: %s", 
+                         list(self.languages.keys()))
 
     def extract_text_from_block(self, image: Image.Image, block_position: Dict) -> Tuple[str, str, float]:
         """Wyciąga tekst z bloku obrazu"""
-        # Wytnij blok z obrazu
-        x, y, w, h = block_position['x'], block_position['y'], block_position['width'], block_position['height']
-        block_image = image.crop((x, y, x + w, y + h))
-
-        # OCR z kilkoma językami
-        custom_config = r'--oem 3 --psm 6 -l pol+eng+deu'
-        text = pytesseract.image_to_string(block_image, config=custom_config)
-
-        # Rozpoznaj język
-        language = self._detect_language(text)
-
-        # Oblicz pewność OCR
-        confidence = self._calculate_ocr_confidence(block_image, text)
-
-        return text.strip(), language, confidence
+        self.logger.debug("Rozpoczynanie ekstrakcji tekstu z bloku")
+        try:
+            # Wyciągnij współrzędne bloku
+            x, y, w, h = block_position['x'], block_position['y'], block_position['width'], block_position['height']
+            self.logger.debug(f"Współrzędne bloku: x={x}, y={y}, width={w}, height={h}")
+            
+            # Wytnij obszar bloku
+            block_img = image.crop((x, y, x + w, y + h))
+            
+            # Konwersja do OpenCV do dalszego przetwarzania
+            cv_img = cv2.cvtColor(np.array(block_img), cv2.COLOR_RGB2BGR)
+            self.logger.debug("Konwersja do formatu OpenCV zakończona")
+            
+            # Preprocessing obrazu
+            self.logger.debug("Przetwarzanie wstępne obrazu (konwersja do skali szarości i usuwanie szumów)")
+            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+            denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+            
+            # OCR
+            self.logger.debug("Wykonywanie OCR na bloku obrazu")
+            text = pytesseract.image_to_string(denoised, lang='pol+eng')
+            self.logger.debug(f"Rozpoznany tekst (pierwsze 50 znaków): {text[:50]}...")
+            
+            # Rozpoznaj język
+            language = self._detect_language(text)
+            self.logger.debug(f"Rozpoznany język: {language}")
+            
+            # Oblicz pewność OCR
+            confidence = self._calculate_ocr_confidence(denoised, text)
+            self.logger.info(f"Zakończono ekstrakcję tekstu (pewność: {confidence:.2f}%)")
+            
+            return text.strip(), language, confidence
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas ekstrakcji tekstu: {str(e)}", exc_info=True)
+            return "", "unknown", 0.0
 
     def _detect_language(self, text: str) -> str:
         """Rozpoznaje język tekstu"""
+        self.logger.debug("Rozpoczynanie rozpoznawania języka")
+        if not text.strip():
+            self.logger.warning("Brak tekstu do analizy języka")
+            return 'unknown'
+            
         try:
-            if len(text.strip()) < 10:
-                return 'unknown'
-            detected = detect(text)
-            return detected if detected in self.languages else 'en'
-        except:
-            return 'en'
+            # Użyj pierwszych 1000 znaków dla lepszej wydajności
+            sample_text = text[:1000]
+            self.logger.debug(f"Próbka tekstu do analizy języka (pierwsze 100 znaków): {sample_text[:100]}...")
+            
+            lang = detect(sample_text)
+            detected_lang = self.languages.get(lang, 'unknown')
+            self.logger.info(f"Rozpoznany język: {detected_lang} (kod: {lang})")
+            
+            return detected_lang
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas rozpoznawania języka: {str(e)}", exc_info=True)
+            return 'unknown'
 
-    def _calculate_ocr_confidence(self, image: Image.Image, text: str) -> float:
-        """Oblicza pewność OCR"""
+    def _calculate_ocr_confidence(self, image: np.ndarray, text: str) -> float:
+        """Oblicza pewność OCR na podstawie jakości obrazu i długości tekstu"""
+        self.logger.debug("Obliczanie pewności OCR")
+        
+        if not text.strip():
+            self.logger.warning("Brak tekstu - pewność OCR wynosi 0%")
+            return 0.0
+            
         try:
-            # Użyj pytesseract do obliczenia pewności
-            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
-            confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
-            return np.mean(confidences) / 100.0 if confidences else 0.5
-        except:
-            return 0.5
+            # Oblicz jakość obrazu na podstawie średniej wartości pikseli
+            img_quality = np.mean(image) / 255.0
+            self.logger.debug(f"Jakość obrazu: {img_quality:.2f}")
+            
+            # Oblicz jakość tekstu na podstawie długości
+            text_quality = min(1.0, len(text) / 100.0)
+            self.logger.debug(f"Jakość tekstu (długość): {text_quality:.2f}")
+            
+            # Połącz oba wskaźniki z wagami
+            confidence = (img_quality * 0.7 + text_quality * 0.3) * 100
+            self.logger.info(f"Obliczona pewność OCR: {confidence:.2f}%")
+            
+            return confidence
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas obliczania pewności OCR: {str(e)}", exc_info=True)
+            return 0.0
 
 
 class HTMLGenerator:
     """Generator HTML z metadanymi JSON"""
 
     def __init__(self):
+        self.logger = logging.getLogger('vhtml.html_generator')
+        self.logger.debug("Inicjalizacja generatora HTML")
         self.base_template = self._get_base_template()
+        self.logger.debug("Załadowano szablon bazowy HTML")
 
     def generate_html(self, metadata: DocumentMetadata, images: List[Image.Image]) -> str:
         """Generuje HTML z metadanymi"""
-
-        # Przygotuj dane dla szablonu
-        template_data = {
-            'document': asdict(metadata),
-            'blocks': []
-        }
-
-        # Przygotuj bloki z obrazami
-        for i, block in enumerate(metadata.blocks):
-            # Konwertuj obraz bloku do base64
-            if i < len(images):
-                block_image = self._extract_block_image(images[0], block.position)
-                block.image_data = self._image_to_base64(block_image)
-
-            template_data['blocks'].append(asdict(block))
-
-        # Renderuj template
-        template = Template(self.base_template)
-        html_content = template.render(**template_data)
-
-        return html_content
+        self.logger.info("Rozpoczynanie generowania HTML")
+        try:
+            # Przygotuj dane do szablonu
+            self.logger.debug("Przygotowywanie metadanych dokumentu")
+            template_data = {
+                'title': f'Dokument - {metadata.doc_type}',
+                'metadata': asdict(metadata),
+                'blocks': [asdict(block) for block in metadata.blocks]
+            }
+            
+            self.logger.debug(f"Przygotowano dane dla {len(metadata.blocks)} bloków")
+            
+            # Renderuj szablon
+            self.logger.debug("Renderowanie szablonu HTML")
+            template = Template(self.base_template)
+            html_content = template.render(**template_data)
+            
+            self.logger.info(f"Wygenerowano HTML o rozmiarze {len(html_content)} bajtów")
+            return html_content
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas generowania HTML: {str(e)}", exc_info=True)
+            raise
 
     def _extract_block_image(self, full_image: Image.Image, position: Dict) -> Image.Image:
         """Wycina obraz bloku z pełnego obrazu"""
-        x, y, w, h = position['x'], position['y'], position['width'], position['height']
-        return full_image.crop((x, y, x + w, y + h))
+        self.logger.debug(f"Wycinanie obrazu bloku: x={position['x']}, y={position['y']}, w={position['width']}, h={position['height']}")
+        try:
+            x, y, w, h = position['x'], position['y'], position['width'], position['height']
+            block_img = full_image.crop((x, y, x + w, y + h))
+            self.logger.debug(f"Pomyślnie wycięto obszar o rozmiarze {block_img.size}")
+            return block_img
+        except Exception as e:
+            self.logger.error(f"Błąd podczas wycinania obrazu bloku: {str(e)}", exc_info=True)
+            raise
 
     def _image_to_base64(self, image: Image.Image) -> str:
-        """Konwertuje obraz do base64"""
-        buffer = BytesIO()
-        image.save(buffer, format='PNG')
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64,{img_str}"
+        """Konwertuje obraz do formatu base64"""
+        self.logger.debug("Konwersja obrazu do formatu base64")
+        try:
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            self.logger.debug(f"Wygenerowano ciąg base64 o długości {len(img_str)} znaków")
+            return f"data:image/png;base64,{img_str}"
+        except Exception as e:
+            self.logger.error(f"Błąd podczas konwersji obrazu do base64: {str(e)}", exc_info=True)
+            return ""
 
     def _get_base_template(self) -> str:
         """Zwraca szablon HTML"""
@@ -541,87 +699,118 @@ class DocumentAnalyzer:
     """Główna klasa systemu analizy dokumentów"""
 
     def __init__(self):
+        self.logger = logging.getLogger('vhtml.document_analyzer')
+        self.logger.info("Inicjalizacja DocumentAnalyzer")
+        
+        self.logger.debug("Inicjalizacja komponentów")
         self.pdf_processor = PDFProcessor()
         self.layout_analyzer = LayoutAnalyzer()
         self.ocr_engine = OCREngine()
         self.html_generator = HTMLGenerator()
+        self.logger.info("Zainicjalizowano wszystkie komponenty")
 
     def analyze_document(self, pdf_path: str, output_dir: str = "output") -> str:
         """Analizuje dokument PDF i generuje HTML"""
-        print(f"Rozpoczynam analizę dokumentu: {pdf_path}")
+        self.logger.info(f"Rozpoczynanie analizy dokumentu: {pdf_path}")
+        self.logger.info(f"Katalog wyjściowy: {os.path.abspath(output_dir)}")
+        
+        try:
+            # Konwertuj PDF na obrazy
+            self.logger.info("Konwersja PDF na obrazy...")
+            images = self.pdf_processor.pdf_to_images(pdf_path)
+            if not images:
+                self.logger.error("Nie udało się przekonwertować pliku PDF na obrazy")
+                return None
+            self.logger.info(f"Pomyślnie przekonwertowano {len(images)} stron")
 
-        # Krok 1: Konwersja PDF do obrazów
-        images = self.pdf_processor.pdf_to_images(pdf_path)
-        if not images:
-            raise ValueError("Nie udało się przetworzyć PDF")
+            # Analizuj układ pierwszego obrazu
+            self.logger.info("Analiza układu dokumentu...")
+            layout_type, blocks = self.layout_analyzer.analyze_layout(images[0])
+            self.logger.info(f"Zidentyfikowano układ: {layout_type} z {len(blocks)} blokami")
 
-        print(f"Przetworzone strony: {len(images)}")
+            # Przetwórz każdy blok przez OCR
+            self.logger.info("Przetwarzanie bloków tekstu...")
+            document_blocks = []
+            for i, block in enumerate(blocks):
+                self.logger.debug(f"Przetwarzanie bloku {i+1}/{len(blocks)}")
+                
+                # Ekstrakcja tekstu
+                text, language, confidence = self.ocr_engine.extract_text_from_block(images[0], block['position'])
+                self.logger.debug(f"Blok {i}: rozpoznano {len(text)} znaków (pewność: {confidence:.1f}%)")
+                
+                # Określ typ bloku
+                block_type = self._classify_block_type(text, i, layout_type)
+                self.logger.debug(f"Zidentyfikowano typ bloku: {block_type}")
+                
+                # Analizuj formatowanie
+                formatting = self._analyze_formatting(text)
+                
+                # Utwórz obiekt bloku
+                document_block = Block(
+                    id=f"block_{i}",
+                    type=block_type,
+                    position=block['position'],
+                    content=text,
+                    language=language,
+                    confidence=confidence,
+                    formatting=formatting
+                )
+                document_blocks.append(document_block)
+                
+                if i > 0 and i % 10 == 0:  # Log co 10 bloków, aby nie zaśmiecać logów
+                    self.logger.info(f"Przetworzono {i}/{len(blocks)} bloków")
 
-        # Krok 2: Analiza pierwszej strony (możliwość rozszerzenia na wszystkie)
-        first_page = images[0]
-        layout_type, detected_blocks = self.layout_analyzer.analyze_layout(first_page)
+            
+            self.logger.info(f"Zakończono przetwarzanie {len(document_blocks)} bloków")
 
-        print(f"Wykryty układ: {layout_type}, bloków: {len(detected_blocks)}")
+            # Określ język dokumentu
+            self.logger.info("Określanie języka dokumentu...")
+            language = self._determine_document_language(document_blocks)
+            self.logger.info(f"Zidentyfikowano język dokumentu: {language}")
+            
+            # Określ typ dokumentu
+            self.logger.info("Klasyfikacja typu dokumentu...")
+            doc_type = self._classify_document_type(layout_type, document_blocks)
+            self.logger.info(f"Zidentyfikowano typ dokumentu: {doc_type}")
 
-        # Krok 3: OCR dla każdego bloku
-        blocks = []
-        total_confidence = 0
-
-        for i, block_data in enumerate(detected_blocks):
-            text, language, confidence = self.ocr_engine.extract_text_from_block(
-                first_page, block_data['position']
-            )
-
-            block = Block(
-                id=chr(65 + i),  # A, B, C, D...
-                type=self._classify_block_type(text, i, layout_type),
-                position=block_data['position'],
-                content=text,
+            # Przygotuj metadane
+            self.logger.info("Przygotowywanie metadanych...")
+            avg_confidence = sum(b.confidence for b in document_blocks) / len(document_blocks) if document_blocks else 0
+            metadata = DocumentMetadata(
+                doc_type=doc_type,
                 language=language,
-                confidence=confidence,
-                formatting=self._analyze_formatting(text)
+                layout=layout_type,
+                confidence=avg_confidence,
+                blocks=document_blocks
             )
+            self.logger.info(f"Średnia pewność OCR: {avg_confidence:.1f}%")
 
-            blocks.append(block)
-            total_confidence += confidence
-
-            print(f"Blok {block.id}: {len(text)} znaków, język: {language}, pewność: {confidence:.2f}")
-
-        # Krok 4: Utworzenie metadanych dokumentu
-        avg_confidence = total_confidence / len(blocks) if blocks else 0
-        doc_language = self._determine_document_language(blocks)
-
-        metadata = DocumentMetadata(
-            doc_type=self._classify_document_type(layout_type, blocks),
-            language=doc_language,
-            layout=layout_type,
-            confidence=avg_confidence,
-            blocks=blocks
-        )
-
-        # Krok 5: Generowanie HTML
-        html_content = self.html_generator.generate_html(metadata, images)
-
-        # Krok 6: Zapis plików
-        os.makedirs(output_dir, exist_ok=True)
-
-        base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-        html_path = os.path.join(output_dir, f"{base_name}.html")
-        json_path = os.path.join(output_dir, f"{base_name}_metadata.json")
-
-        # Zapisz HTML
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-
-        # Zapisz metadane JSON
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(asdict(metadata), f, ensure_ascii=False, indent=2)
-
-        print(f"Analiza zakończona!")
-        print(f"HTML: {html_path}")
-        print(f"JSON: {json_path}")
-
-        return html_path
+            # Wygeneruj HTML
+            self.logger.info("Generowanie HTML...")
+            html_content = self.html_generator.generate_html(metadata, images)
+            
+            # Utwórz katalog wyjściowy jeśli nie istnieje
+            os.makedirs(output_dir, exist_ok=True)
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            
+            # Zapisz HTML
+            html_path = os.path.join(output_dir, f"{base_name}.html")
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            self.logger.info(f"Zapisano plik HTML: {html_path}")
+                
+            # Zapisz metadane JSON
+            metadata_path = os.path.join(output_dir, f"{base_name}_metadata.json")
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(asdict(metadata), f, ensure_ascii=False, indent=2)
+            self.logger.info(f"Zapisano metadane: {metadata_path}")
+                
+            self.logger.info("Analiza dokumentu zakończona pomyślnie")
+            return html_path, metadata_path
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas analizy dokumentu: {str(e)}", exc_info=True)
+            raise
 
     def _classify_block_type(self, text: str, block_index: int, layout_type: str) -> str:
         """Klasyfikuje typ bloku na podstawie zawartości"""
