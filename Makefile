@@ -31,7 +31,7 @@ setup:
 # Installation
 install:
 	@echo "Installing production dependencies with Poetry..."
-	poetry install --no-dev
+	poetry install --without dev
 
 install-dev:
 	@echo "Installing development dependencies with Poetry..."
@@ -87,11 +87,6 @@ docker-dev:
 
 docker-stop:
 	docker-compose down
-
-# Setup environment
-setup:
-	chmod +x scripts/setup.sh
-	./scripts/setup.sh
 
 # Download models
 download-models:
