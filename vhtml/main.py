@@ -452,10 +452,21 @@ def main():
     parser.add_argument("-v", "--view", help="Otwórz wygenerowany HTML w przeglądarce", action="store_true")
     parser.add_argument("--extractor-service", choices=["invoice", "receipt", "cv", "contract", "financial", "medical", "legal", "tax", "insurance", "education"], help="Zewnętrzna usługa ekstrakcji danych z dokumentu (np. invoice, receipt)")
     parser.add_argument("--format", choices=["html", "mhtml"], default="html", help="Format wyjściowy: html (jeden plik) lub mhtml (multipart)")
-    
+    parser.add_argument("--docker", help="Ścieżka do docker-compose.yml lub katalogu z docker-compose.yml; uruchomi automatycznie wymagane usługi w Dockerze", nargs="?", const=".")
     args = parser.parse_args()
     
     try:
+        # Automatyczne uruchomienie docker-compose jeśli podano --docker
+        if args.docker:
+            import subprocess
+            import time
+            import os
+            docker_dir = args.docker if os.path.isdir(args.docker) else os.path.dirname(args.docker)
+            print(f"[vhtml] Uruchamiam docker-compose w katalogu: {docker_dir}")
+            subprocess.run(["docker-compose", "up", "-d"], cwd=docker_dir, check=True)
+            print("[vhtml] Czekam na uruchomienie usług (10s)...")
+            time.sleep(10)
+        
         if args.batch:
             if not os.path.isdir(args.input):
                 print(f"Błąd: {args.input} nie jest katalogiem")
