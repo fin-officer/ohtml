@@ -1,49 +1,94 @@
-# System Analizy i Konwersji PDF do HTML z OCR
+# PDF to HTML Conversion System with OCR
 
-## 1. Architektura Systemu
+## 1. System Architecture
 
-### Główne Komponenty:
-- **PDF Processor** - przetwarzanie PDF do obrazów
-- **Layout Analyzer** - analiza układu i segmentacja bloków
-- **OCR Engine** - rozpoznawanie tekstu w blokach
-- **Language Detector** - rozpoznawanie języka i formatu
-- **HTML Generator** - generowanie struktury HTML z metadanymi
-- **Template Engine** - różne szablony dla typów dokumentów
+### Core Components:
+- **PDF Processor** - converts PDF documents to images
+- **Layout Analyzer** - analyzes page layout and segments content blocks
+- **OCR Engine** - performs text recognition in content blocks
+- **Language Detector** - identifies document language and format
+- **HTML Generator** - creates structured HTML with metadata
+- **Template Engine** - provides templates for different document types
 
-## 2. Technologie i Biblioteki
+## 2. Technology Stack
 
-### Główne Biblioteki:
-- **OpenCV** - przetwarzanie obrazów i segmentacja
-- **Tesseract/EasyOCR** - OCR
-- **pdf2image** - konwersja PDF do obrazów
-- **langdetect** - rozpoznawanie języka
-- **Jinja2** - templating HTML
-- **scikit-image** - dodatkowe operacje na obrazach
+### Core Libraries:
+- **OpenCV** - image processing and segmentation
+- **Tesseract/EasyOCR** - optical character recognition
+- **pdf2image** - PDF to image conversion
+- **langdetect** - language detection
+- **Jinja2** - HTML templating
+- **scikit-image** - advanced image operations
 
-### Dodatkowe Narzędzia:
-- **PyMuPDF (fitz)** - alternatywne przetwarzanie PDF
-- **layoutparser** - gotowe modele do analizy layoutu
-- **spaCy** - analiza tekstu i NER
-- **Pillow** - manipulacja obrazami
+### Additional Tools:
+- **PyMuPDF (fitz)** - alternative PDF processing
+- **layoutparser** - pre-trained layout analysis models
+- **spaCy** - text analysis and NER
+- **Pillow** - image manipulation
 
-## 3. Workflow Systemu
+## 3. System Workflow
 
-### Krok 1: Preprocessing PDF
+### Step 1: PDF Preprocessing
 ```
-PDF → Strony jako obrazy → Preprocessing (denoise, deskew) → Analiza layoutu
-```
-
-### Krok 2: Segmentacja Bloków
-```
-Obraz → Wykrywanie bloków tekstu → Klasyfikacja bloków → Hierarchia bloków
+PDF → Page Images → Preprocessing (denoising, deskewing) → Layout Analysis
 ```
 
-### Krok 3: OCR i Analiza
+### Step 2: Block Segmentation
 ```
-Blok → OCR → Rozpoznanie języka → Analiza formatowania → Metadane
+Image → Text Block Detection → Block Classification → Block Hierarchy
 ```
 
-### Krok 4: Generowanie HTML
+### Step 3: OCR and Analysis
 ```
-Struktura bloków + Tekst + Metadane → HTML Template → Finalne HTML
+Block → OCR → Language Detection → Format Analysis → Metadata
+```
+
+### Step 4: HTML Generation
+```
+Block Structure + Text + Metadata → HTML Template → Final HTML
+```
+
+## 4. Document Types and Templates
+
+### Invoice Template (4 blocks):
+- **Block A** (top left) - sender information
+- **Block B** (top right) - recipient information
+- **Block C** (middle) - line items table
+- **Block D** (bottom) - payment summary
+
+### 6-Column Template:
+- **Blocks A,B** (top row)
+- **Blocks C,D** (middle row)
+- **Blocks E,F** (bottom row)
+
+### Universal Template:
+- Automatic block count detection
+- Adaptive segmentation
+
+## 5. Metadata Structure
+
+```json
+{
+  "document": {
+    "type": "invoice|form|letter|other",
+    "language": "pl|en|de",
+    "layout": "4-block|6-block|custom",
+    "confidence": 0.95
+  },
+  "blocks": [
+    {
+      "id": "A",
+      "type": "header|content|table|footer",
+      "position": {"x": 0, "y": 0, "width": 300, "height": 200},
+      "content": "recognized text",
+      "language": "en",
+      "confidence": 0.92,
+      "formatting": {
+        "bold": [0, 10],
+        "tables": [],
+        "lists": []
+      }
+    }
+  ]
+}
 ```

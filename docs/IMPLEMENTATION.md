@@ -1,53 +1,39 @@
-# Plan Implementacji
+# Implementation Roadmap
 
-## Faza 1: Podstawowa Segmentacja
-1. ✅ Konwersja PDF do obrazów
-2. ✅ Podstawowa segmentacja bloków OpenCV
-3. ✅ Prosty OCR z Tesseract
-4. ✅ Generowanie podstawowego HTML
+## Phase 1: Core Functionality (Completed)
+1. ✅ PDF to image conversion
+2. ✅ Basic block segmentation with OpenCV
+3. ✅ OCR with Tesseract
+4. ✅ Basic HTML generation
 
-## Faza 2: Inteligentna Analiza
-1. 🔄 Klasyfikacja typów dokumentów
-2. 🔄 Rozpoznawanie języka
-3. 🔄 Analiza formatowania tekstu
-4. 🔄 Szablon-specyficzne przetwarzanie
+## Phase 2: Intelligent Analysis (In Progress)
+1. 🔄 Document type classification
+2. 🔄 Language detection
+3. 🔄 Text formatting analysis
+4. 🔄 Template-specific processing
 
-## Faza 3: Zaawansowane Funkcje
-1. ⏳ Machine Learning dla klasyfikacji bloków
-2. ⏳ Adaptacyjne szablony
+## Phase 3: Advanced Features (Planned)
+1. ⏳ Machine learning for block classification
+2. ⏳ Adaptive templates
 3. ⏳ Batch processing
-4. ⏳ API REST
+4. ⏳ REST API
 
-## Faza 4: Optymalizacja
-1. ⏳ Caching rezultatów
+## Phase 4: Optimization (Planned)
+1. ⏳ Result caching
 2. ⏳ Parallel processing
-3. ⏳ UI dla konfiguracji
-4. ⏳ Eksport do różnych formatów
+3. ⏳ Configuration UI
+4. ⏳ Export to multiple formats
 
-## Gotowe Rozwiązania do Wykorzystania
+## Success Criteria
 
-### Layout Analysis:
-- **LayoutParser** - pretrenowane modele
-- **PaddleOCR** - integrowane layout + OCR
-- **Document AI** modele z Hugging Face
+### Accuracy
+- ✅ Block segmentation accuracy > 90%
+- ✅ OCR accuracy > 95%
+- ✅ Original formatting preservation
 
-### OCR Engines:
-- **Tesseract** + **pytesseract**
-- **EasyOCR** 
-- **TrOCR** (Transformer-based)
-
-### Preprocessing:
-- **OpenCV** kontury i segmentacja
-- **scikit-image** filtering
-- **Pillow** podstawowe operacje
-
-## Kryteria Sukcesu
-
-- ✅ Dokładność segmentacji > 90%
-- ✅ Dokładność OCR > 95% 
-- ✅ Zachowanie formatowania oryginalnego
-- ✅ Responsywny HTML output
-- ✅ Metadane JSON dla każdego bloku
-- ✅ Wsparcie dla języków PL/EN/DE
-- ✅ Modularna architektura
-- ✅ Możliwość dodawania nowych typów dokumentów
+### Functionality
+- ✅ Responsive HTML output
+- ✅ JSON metadata for each block
+- ✅ Multi-language support (PL/EN/DE)
+- ✅ Modular architecture
+- ✅ Extensible document type system
