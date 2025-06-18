@@ -450,6 +450,8 @@ def main():
     parser.add_argument("-o", "--output", help="Katalog wyjściowy", default="output")
     parser.add_argument("-b", "--batch", help="Tryb wsadowy (przetwarzanie katalogu)", action="store_true")
     parser.add_argument("-v", "--view", help="Otwórz wygenerowany HTML w przeglądarce", action="store_true")
+    parser.add_argument("--extractor-service", choices=["invoice", "receipt", "cv", "contract", "financial", "medical", "legal", "tax", "insurance", "education"], help="Zewnętrzna usługa ekstrakcji danych z dokumentu (np. invoice, receipt)")
+    parser.add_argument("--format", choices=["html", "mhtml"], default="html", help="Format wyjściowy: html (jeden plik) lub mhtml (multipart)")
     
     args = parser.parse_args()
     
@@ -471,13 +473,35 @@ def main():
                 print(f"Błąd: {args.input} nie jest plikiem")
                 sys.exit(1)
             
+            # Jeśli wybrano zewnętrzną usługę ekstrakcji
+            if args.extractor_service:
+                import requests
+                url = f"http://localhost:8000/api/v1/{args.extractor_service}/extract"
+                with open(args.input, "rb") as f:
+                    files = {"file": (os.path.basename(args.input), f, "application/pdf")}
+                    resp = requests.post(url, files=files)
+                    if resp.status_code != 200:
+                        print(f"Błąd usługi {args.extractor_service}: {resp.status_code} {resp.text}")
+                        sys.exit(1)
+                    extracted_data = resp.json()
+                    print(f"Dane wyekstrahowane przez usługę {args.extractor_service}:\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}")
+                    # Możesz tu dodać logikę dalszego przetwarzania tych danych
+            
             analyzer = DocumentAnalyzer()
             html_path = analyzer.analyze_document(args.input, args.output)
             
-            print(f"\n✅ Sukces! HTML wygenerowany: {html_path}")
-            
-            if args.view:
-                webbrowser.open(f'file://{os.path.abspath(html_path)}')
+            # Wybór formatu wyjściowego
+            if args.format == "mhtml":
+                from vhtml.core.generate_mhtml import generate_mhtml
+                mhtml_path = html_path.replace(".html", ".mhtml")
+                generate_mhtml(args.output, mhtml_path)
+                print(f"\n✅ Sukces! MHTML wygenerowany: {mhtml_path}")
+                if args.view:
+                    webbrowser.open(f'file://{os.path.abspath(mhtml_path)}')
+            else:
+                print(f"\n✅ Sukces! HTML wygenerowany: {html_path}")
+                if args.view:
+                    webbrowser.open(f'file://{os.path.abspath(html_path)}')
     
     except Exception as e:
         print(f"\n❌ Błąd: {e}")
