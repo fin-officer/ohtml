@@ -7,14 +7,17 @@ Główny moduł systemu do konwersji dokumentów do HTML z wykorzystaniem OCR
 import os
 import sys
 import argparse
-from typing import List, Dict, Optional
+import json
+from typing import List, Dict, Optional, Tuple, Any
 import webbrowser
 from pathlib import Path
+from datetime import datetime
 
 from vhtml.core.pdf_processor import PDFProcessor
 from vhtml.core.layout_analyzer import LayoutAnalyzer, Block, DocumentMetadata
 from vhtml.core.ocr_engine import OCREngine
 from vhtml.core.html_generator import HTMLGenerator
+from vhtml.utils.logging_utils import logger as vhtml_logger
 
 
 class DocumentAnalyzer:
@@ -38,121 +41,280 @@ class DocumentAnalyzer:
         Returns:
             Ścieżka do wygenerowanego pliku HTML
         """
-        print(f"Analizuję dokument: {pdf_path}")
+        # Set up document-specific logger
+        doc_logger = vhtml_logger.get_document_logger(pdf_path, output_dir)
+        doc_logger.info(f"Starting document analysis: {os.path.basename(pdf_path)}")
+        doc_logger.info(f"Output directory: {output_dir}")
         
-        # Krok 1: Konwersja PDF do obrazów
-        print("1. Konwersja PDF do obrazów...")
-        images = self.pdf_processor.pdf_to_images(pdf_path)
-        if not images:
-            raise ValueError("Nie udało się przekonwertować PDF do obrazów")
+        start_time = datetime.now()
+        processing_steps = {}
         
-        print(f"   Przekonwertowano {len(images)} stron")
+        try:
+            # Krok 1: Konwersja PDF do obrazów
+            doc_logger.info("1. Converting PDF to images...")
+            step_start = datetime.now()
+            images = self.pdf_processor.pdf_to_images(pdf_path)
+            if not images:
+                raise ValueError("Failed to convert PDF to images")
+            
+            processing_steps['pdf_conversion'] = {
+                'status': 'success',
+                'pages': len(images),
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
+            doc_logger.info(f"Converted {len(images)} pages")
+            
+            # Krok 2: Przetwarzanie wstępne obrazów
+            doc_logger.info("2. Preprocessing images...")
+            step_start = datetime.now()
+            processed_images = [self.pdf_processor.preprocess_image(img) for img in images]
+            processing_steps['image_preprocessing'] = {
+                'status': 'success',
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
+            
+            # Krok 3: Analiza układu i segmentacja bloków
+            doc_logger.info("3. Analyzing document layout...")
+            step_start = datetime.now()
+            layout_type, blocks = self.layout_analyzer.analyze_layout(processed_images[0])
+            processing_steps['layout_analysis'] = {
+                'status': 'success',
+                'layout_type': layout_type,
+                'blocks_found': len(blocks),
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
+            doc_logger.info(f"Detected layout: {layout_type} with {len(blocks)} blocks")
         
-        # Krok 2: Przetwarzanie wstępne obrazów
-        print("2. Przetwarzanie wstępne obrazów...")
-        processed_images = [self.pdf_processor.preprocess_image(img) for img in images]
-        
-        # Krok 3: Analiza układu i segmentacja bloków
-        print("3. Analiza układu dokumentu...")
-        layout_type, blocks = self.layout_analyzer.analyze_layout(processed_images[0])
-        print(f"   Wykryto układ: {layout_type}")
-        print(f"   Znaleziono {len(blocks)} bloków")
-        
-        # Krok 4: OCR i analiza tekstu
-        print("4. Rozpoznawanie tekstu (OCR)...")
-        document_blocks = []
-        
-        for i, block in enumerate(blocks):
-            print(f"   Przetwarzanie bloku {i+1}/{len(blocks)}...")
-            text, language, confidence = self.ocr_engine.extract_text_from_block(
-                processed_images[0], block['position']
+            # Krok 4: OCR i analiza tekstu
+            doc_logger.info("4. Performing OCR and text analysis...")
+            step_start = datetime.now()
+            document_blocks = []
+            ocr_stats = {
+                'total_blocks': len(blocks),
+                'languages': {},
+                'confidence_scores': []
+            }
+            
+            for i, block in enumerate(blocks):
+                block_start = datetime.now()
+                block_log = f"Processing block {i+1}/{len(blocks)}"
+                doc_logger.info(f"{block_log}...")
+                
+                try:
+                    # Extract text from block using OCR
+                    text, language, confidence = self.ocr_engine.extract_text_from_block(
+                        processed_images[0], block['position']
+                    )
+                    
+                    # Update OCR statistics
+                    ocr_stats['confidence_scores'].append(confidence)
+                    if language in ocr_stats['languages']:
+                        ocr_stats['languages'][language] += 1
+                    else:
+                        ocr_stats['languages'][language] = 1
+                    
+                    # Klasyfikacja typu bloku
+                    block_type = self._classify_block_type(text, i, layout_type)
+                    
+                    # Analiza formatowania
+                    formatting = self._analyze_formatting(text)
+                    
+                    # Tworzenie obiektu bloku
+                    document_blocks.append(Block(
+                        id=f"block_{i+1}",
+                        type=block_type,
+                        position=block['position'],
+                        content=text,
+                        language=language,
+                        confidence=confidence,
+                        formatting=formatting
+                    ))
+                    
+                    block_time = (datetime.now() - block_start).total_seconds()
+                    doc_logger.debug(f"{block_log} completed in {block_time:.2f}s (confidence: {confidence:.2f})")
+                    
+                except Exception as e:
+                    doc_logger.error(f"Error processing block {i+1}: {str(e)}", exc_info=True)
+                    raise
+            
+            processing_steps['ocr_processing'] = {
+                'status': 'success',
+                'blocks_processed': len(document_blocks),
+                'languages_detected': ocr_stats['languages'],
+                'avg_confidence': sum(ocr_stats['confidence_scores']) / len(ocr_stats['confidence_scores']) if ocr_stats['confidence_scores'] else 0,
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
+            
+            # Krok 5: Określenie metadanych dokumentu
+            doc_logger.info("5. Generating document metadata...")
+            step_start = datetime.now()
+            
+            doc_language = self._determine_document_language(document_blocks)
+            doc_type = self._classify_document_type(layout_type, document_blocks)
+            
+            # Calculate average confidence
+            avg_confidence = sum(block.confidence for block in document_blocks) / len(document_blocks) if document_blocks else 0
+            
+            metadata = DocumentMetadata(
+                doc_type=doc_type,
+                language=doc_language,
+                layout=layout_type,
+                confidence=avg_confidence,
+                pages=[{
+                    'number': i+1,
+                    'blocks': [block.to_dict() for block in document_blocks]
+                } for i in range(len(images))],
+                source_file=os.path.basename(pdf_path),
+                processing_time=0  # Will be updated after processing
             )
             
-            # Klasyfikacja typu bloku
-            block_type = self._classify_block_type(text, i, layout_type)
+            processing_steps['metadata_generation'] = {
+                'status': 'success',
+                'document_type': doc_type,
+                'detected_language': doc_language,
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
             
-            # Analiza formatowania
-            formatting = self._analyze_formatting(text)
+            # Krok 6: Generowanie HTML
+            doc_logger.info("6. Generating HTML output...")
+            step_start = datetime.now()
             
-            # Tworzenie obiektu bloku
-            document_blocks.append(Block(
-                id=f"block_{i+1}",
-                type=block_type,
-                position=block['position'],
-                content=text,
-                language=language,
-                confidence=confidence,
-                formatting=formatting
-            ))
-        
-        # Krok 5: Określenie metadanych dokumentu
-        print("5. Generowanie metadanych...")
-        doc_language = self._determine_document_language(document_blocks)
-        doc_type = self._classify_document_type(layout_type, document_blocks)
-        
-        # Obliczenie średniej pewności
-        avg_confidence = sum(block.confidence for block in document_blocks) / len(document_blocks) if document_blocks else 0
-        
-        metadata = DocumentMetadata(
-            doc_type=doc_type,
-            language=doc_language,
-            layout=layout_type,
-            confidence=avg_confidence,
-            blocks=document_blocks
-        )
-        
-        # Krok 6: Generowanie HTML
-        print("6. Generowanie HTML...")
-        html = self.html_generator.generate_html(metadata, processed_images)
-        
-        # Krok 7: Zapisywanie wyników
-        print("7. Zapisywanie wyników...")
-        output_filename = os.path.basename(pdf_path).replace('.pdf', '.html')
-        output_path = os.path.join(output_dir, output_filename)
-        
-        # Upewnij się, że katalog wyjściowy istnieje
-        os.makedirs(output_dir, exist_ok=True)
-        
-        html_path = self.html_generator.save_html_with_metadata(html, metadata, output_path)
-        print(f"   HTML zapisany: {html_path}")
-        
-        return html_path
+            html_content = self.html_generator.generate_html(metadata, processed_images)
+            
+            processing_steps['html_generation'] = {
+                'status': 'success',
+                'duration_seconds': (datetime.now() - step_start).total_seconds()
+            }
+            
+            # Krok 7: Zapis wyników
+            doc_logger.info("7. Saving results...")
+            step_start = datetime.now()
+            
+            # Create output directory with document name as subdirectory
+            doc_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            doc_output_dir = os.path.join(output_dir, doc_name)
+            os.makedirs(doc_output_dir, exist_ok=True)
+            
+            # Save HTML
+            output_filename = f"{doc_name}.html"
+            output_path = os.path.join(doc_output_dir, output_filename)
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            # Save metadata
+            metadata_path = os.path.join(doc_output_dir, f"{doc_name}_metadata.json")
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                f.write(metadata.to_json(indent=2))
+            
+            # Calculate total processing time
+            total_time = (datetime.now() - start_time).total_seconds()
+            
+            # Update metadata with processing time
+            metadata.processing_time = total_time
+            
+            # Save updated metadata
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                f.write(metadata.to_json(indent=2))
+            
+            # Save processing log
+            log_data = {
+                'document': os.path.basename(pdf_path),
+                'processing_date': datetime.now().isoformat(),
+                'processing_time_seconds': total_time,
+                'steps': processing_steps,
+                'output_files': {
+                    'html': output_path,
+                    'metadata': metadata_path,
+                    'log': doc_logger.handlers[0].baseFilename if doc_logger.handlers else None
+                }
+            }
+            
+            log_path = os.path.join(doc_output_dir, f"{doc_name}_processing_log.json")
+            with open(log_path, 'w', encoding='utf-8') as f:
+                json.dump(log_data, f, indent=2, default=str)
+            
+            doc_logger.info(f"HTML saved to: {output_path}")
+            doc_logger.info(f"Metadata saved to: {metadata_path}")
+            doc_logger.info(f"Processing log saved to: {log_path}")
+            doc_logger.info(f"Total processing time: {total_time:.2f} seconds")
+            
+            return output_path
+            
+        except Exception as e:
+            doc_logger.error(f"Error processing document: {str(e)}", exc_info=True)
+            raise
     
     def _classify_block_type(self, text: str, block_index: int, layout_type: str) -> str:
         """
-        Klasyfikuje typ bloku na podstawie zawartości
+        Klasyfikuje typ bloku na podstawie zawartości i kontekstu
         
         Args:
-            text: Tekst bloku
-            block_index: Indeks bloku
+            text: Zawartość tekstowa bloku
+            block_index: Indeks bloku w dokumencie
             layout_type: Typ układu dokumentu
             
         Returns:
-            Typ bloku (header, content, table, footer, etc.)
+            Zidentyfikowany typ bloku (header, date, invoice_number, seller, buyer, amount, content)
         """
-        # Prosta heurystyka klasyfikacji
-        text_lower = text.lower()
+        if not text.strip():
+            return "empty"
+            
+        text = text.strip().lower()
         
-        if block_index == 0:
+        # Proste heurystyki do klasyfikacji bloków
+        if block_index == 0 and len(text) < 200 and '\n' not in text:
             return "header"
-        elif "faktura" in text_lower or "invoice" in text_lower:
-            return "header"
-        elif "tabela" in text_lower or "table" in text_lower or any(x in text_lower for x in ["lp.", "suma", "razem", "total"]):
-            return "table"
-        elif block_index == len(text) - 1 or any(x in text_lower for x in ["stopka", "footer", "kontakt", "contact"]):
+        
+        # Check for date patterns
+        date_keywords = ["data", "data wystawienia", "data sprzedaży", "data zakupu", "data operacji"]
+        if any(keyword in text for keyword in date_keywords):
+            return "date"
+            
+        # Check for invoice/order number patterns
+        invoice_keywords = ["nr faktury", "numer faktury", "nr zamówienia", "numer dokumentu"]
+        if any(keyword in text for keyword in invoice_keywords):
+            return "invoice_number"
+            
+        # Check for seller information
+        seller_keywords = ["sprzedawca", "sprzedawcy", "sprzedawcą", "sprzedawca:", "sprzedawcy:"]
+        if any(keyword in text for keyword in seller_keywords):
+            return "seller"
+            
+        # Check for buyer information
+        buyer_keywords = ["nabywca", "nabywcy", "nabywcą", "nabywca:", "nabywcy:", "odbiorca", "odbiorcy"]
+        if any(keyword in text for keyword in buyer_keywords):
+            return "buyer"
+            
+        # Check for amount/total information
+        amount_keywords = ["kwota", "wartość", "do zapłaty", "razem", "suma", "płatność", "płatności"]
+        if any(keyword in text for keyword in amount_keywords):
+            return "amount"
+            
+        # Check for currency patterns
+        currency_indicators = ["zł", "pln", "$", "eur", "usd", "€", "gbp", "chf"]
+        if (any(char.isdigit() for char in text) and 
+            any(sep in text for sep in [",", "."]) and 
+            any(currency in text for currency in currency_indicators)):
+            return "amount"
+            
+        # Check for table rows
+        if '\n' in text and text.count('\n') >= 2:
+            lines = text.split('\n')
+            if all('\t' in line or '  ' in line for line in lines[:3]):
+                return "table"
+            
+        # Check for footer content
+        if block_index > 10 and len(text) < 100 and '\n' not in text:
             return "footer"
-        elif any(x in text_lower for x in ["netto", "brutto", "vat", "suma", "total"]):
-            return "summary"
-        elif any(x in text_lower for x in ["nabywca", "sprzedawca", "buyer", "seller", "customer"]):
-            return "details"
-        else:
-            return "content"
+            
+        return "content"
     
     def _analyze_formatting(self, text: str) -> Dict:
         """
         Analizuje formatowanie tekstu
         
-        Args:
+{{ ... }}
             text: Tekst do analizy
             
         Returns:

@@ -22,7 +22,7 @@ def process_single_document():
     
     # Input and output paths
     input_pdf = "invoices/Invoice-30392B3C-0001.pdf"
-    output_dir = "output/examples/single_document"
+    output_dir = "output/single_document"
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)

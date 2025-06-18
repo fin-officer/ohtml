@@ -31,6 +31,19 @@ class Block:
     confidence: float
     formatting: Dict
     image_data: str = ""  # base64 encoded image
+    
+    def to_dict(self) -> Dict:
+        """Konwertuje obiekt Block do słownika do serializacji JSON"""
+        return {
+            'id': self.id,
+            'type': self.type,
+            'position': self.position,
+            'content': self.content,
+            'language': self.language,
+            'confidence': self.confidence,
+            'formatting': self.formatting,
+            'image_data': self.image_data if self.image_data else ""
+        }
 
 
 @dataclass
