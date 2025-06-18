@@ -1,17 +1,231 @@
 #!/usr/bin/env python3
 """
-Przykłady użycia PDF Analyzer oraz rozszerzenia systemu
+vHTML - Optical HTML Generator
+Główny moduł systemu do konwersji dokumentów do HTML z wykorzystaniem OCR
 """
 
-from pdf_analyzer import DocumentAnalyzer, Block, DocumentMetadata
-import json
 import os
-from typing import List, Dict
-import cv2
-import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
-import seaborn as sns
+import sys
+import argparse
+from typing import List, Dict, Optional
+import webbrowser
+from pathlib import Path
+
+from vhtml.core.pdf_processor import PDFProcessor
+from vhtml.core.layout_analyzer import LayoutAnalyzer, Block, DocumentMetadata
+from vhtml.core.ocr_engine import OCREngine
+from vhtml.core.html_generator import HTMLGenerator
+
+
+class DocumentAnalyzer:
+    """Główna klasa systemu analizy dokumentów"""
+
+    def __init__(self):
+        """Inicjalizacja komponentów systemu"""
+        self.pdf_processor = PDFProcessor()
+        self.layout_analyzer = LayoutAnalyzer()
+        self.ocr_engine = OCREngine()
+        self.html_generator = HTMLGenerator()
+    
+    def analyze_document(self, pdf_path: str, output_dir: str = "output") -> str:
+        """
+        Analizuje dokument PDF i generuje HTML
+        
+        Args:
+            pdf_path: Ścieżka do pliku PDF
+            output_dir: Katalog wyjściowy
+            
+        Returns:
+            Ścieżka do wygenerowanego pliku HTML
+        """
+        print(f"Analizuję dokument: {pdf_path}")
+        
+        # Krok 1: Konwersja PDF do obrazów
+        print("1. Konwersja PDF do obrazów...")
+        images = self.pdf_processor.pdf_to_images(pdf_path)
+        if not images:
+            raise ValueError("Nie udało się przekonwertować PDF do obrazów")
+        
+        print(f"   Przekonwertowano {len(images)} stron")
+        
+        # Krok 2: Przetwarzanie wstępne obrazów
+        print("2. Przetwarzanie wstępne obrazów...")
+        processed_images = [self.pdf_processor.preprocess_image(img) for img in images]
+        
+        # Krok 3: Analiza układu i segmentacja bloków
+        print("3. Analiza układu dokumentu...")
+        layout_type, blocks = self.layout_analyzer.analyze_layout(processed_images[0])
+        print(f"   Wykryto układ: {layout_type}")
+        print(f"   Znaleziono {len(blocks)} bloków")
+        
+        # Krok 4: OCR i analiza tekstu
+        print("4. Rozpoznawanie tekstu (OCR)...")
+        document_blocks = []
+        
+        for i, block in enumerate(blocks):
+            print(f"   Przetwarzanie bloku {i+1}/{len(blocks)}...")
+            text, language, confidence = self.ocr_engine.extract_text_from_block(
+                processed_images[0], block['position']
+            )
+            
+            # Klasyfikacja typu bloku
+            block_type = self._classify_block_type(text, i, layout_type)
+            
+            # Analiza formatowania
+            formatting = self._analyze_formatting(text)
+            
+            # Tworzenie obiektu bloku
+            document_blocks.append(Block(
+                id=f"block_{i+1}",
+                type=block_type,
+                position=block['position'],
+                content=text,
+                language=language,
+                confidence=confidence,
+                formatting=formatting
+            ))
+        
+        # Krok 5: Określenie metadanych dokumentu
+        print("5. Generowanie metadanych...")
+        doc_language = self._determine_document_language(document_blocks)
+        doc_type = self._classify_document_type(layout_type, document_blocks)
+        
+        # Obliczenie średniej pewności
+        avg_confidence = sum(block.confidence for block in document_blocks) / len(document_blocks) if document_blocks else 0
+        
+        metadata = DocumentMetadata(
+            doc_type=doc_type,
+            language=doc_language,
+            layout=layout_type,
+            confidence=avg_confidence,
+            blocks=document_blocks
+        )
+        
+        # Krok 6: Generowanie HTML
+        print("6. Generowanie HTML...")
+        html = self.html_generator.generate_html(metadata, processed_images)
+        
+        # Krok 7: Zapisywanie wyników
+        print("7. Zapisywanie wyników...")
+        output_filename = os.path.basename(pdf_path).replace('.pdf', '.html')
+        output_path = os.path.join(output_dir, output_filename)
+        
+        # Upewnij się, że katalog wyjściowy istnieje
+        os.makedirs(output_dir, exist_ok=True)
+        
+        html_path = self.html_generator.save_html_with_metadata(html, metadata, output_path)
+        print(f"   HTML zapisany: {html_path}")
+        
+        return html_path
+    
+    def _classify_block_type(self, text: str, block_index: int, layout_type: str) -> str:
+        """
+        Klasyfikuje typ bloku na podstawie zawartości
+        
+        Args:
+            text: Tekst bloku
+            block_index: Indeks bloku
+            layout_type: Typ układu dokumentu
+            
+        Returns:
+            Typ bloku (header, content, table, footer, etc.)
+        """
+        # Prosta heurystyka klasyfikacji
+        text_lower = text.lower()
+        
+        if block_index == 0:
+            return "header"
+        elif "faktura" in text_lower or "invoice" in text_lower:
+            return "header"
+        elif "tabela" in text_lower or "table" in text_lower or any(x in text_lower for x in ["lp.", "suma", "razem", "total"]):
+            return "table"
+        elif block_index == len(text) - 1 or any(x in text_lower for x in ["stopka", "footer", "kontakt", "contact"]):
+            return "footer"
+        elif any(x in text_lower for x in ["netto", "brutto", "vat", "suma", "total"]):
+            return "summary"
+        elif any(x in text_lower for x in ["nabywca", "sprzedawca", "buyer", "seller", "customer"]):
+            return "details"
+        else:
+            return "content"
+    
+    def _analyze_formatting(self, text: str) -> Dict:
+        """
+        Analizuje formatowanie tekstu
+        
+        Args:
+            text: Tekst do analizy
+            
+        Returns:
+            Słownik z informacjami o formatowaniu
+        """
+        # Prosta analiza formatowania
+        formatting = {
+            "bold": False,
+            "italic": False,
+            "font_size": 12,
+            "alignment": "left"
+        }
+        
+        # Wykrywanie pogrubienia (wszystkie wielkie litery)
+        if text.isupper() and len(text) > 3:
+            formatting["bold"] = True
+        
+        # Wykrywanie kursywy (na podstawie heurystyki)
+        if text.startswith("*") and text.endswith("*"):
+            formatting["italic"] = True
+        
+        # Szacowanie rozmiaru czcionki na podstawie długości linii
+        lines = text.split("\n")
+        if lines and max(len(line) for line in lines) < 30:
+            formatting["font_size"] = 16
+        
+        return formatting
+    
+    def _determine_document_language(self, blocks: List[Block]) -> str:
+        """
+        Określa główny język dokumentu
+        
+        Args:
+            blocks: Lista bloków dokumentu
+            
+        Returns:
+            Kod języka (pl, en, de)
+        """
+        # Zliczanie języków w blokach
+        lang_counts = {}
+        
+        for block in blocks:
+            if block.language != "unknown":
+                lang_counts[block.language] = lang_counts.get(block.language, 0) + 1
+        
+        # Wybierz najczęściej występujący język
+        if lang_counts:
+            return max(lang_counts, key=lang_counts.get)
+        return "unknown"
+    
+    def _classify_document_type(self, layout_type: str, blocks: List[Block]) -> str:
+        """
+        Klasyfikuje typ dokumentu
+        
+        Args:
+            layout_type: Typ układu dokumentu
+            blocks: Lista bloków dokumentu
+            
+        Returns:
+            Typ dokumentu (invoice, form, letter, other)
+        """
+        # Prosta klasyfikacja na podstawie zawartości
+        text_content = " ".join([block.content.lower() for block in blocks])
+        
+        if any(x in text_content for x in ["faktura", "invoice", "rachunek", "vat", "netto", "brutto"]):
+            return "invoice"
+        elif any(x in text_content for x in ["formularz", "form", "wniosek", "application"]):
+            return "form"
+        elif any(x in text_content for x in ["list", "letter", "pismo", "korespondencja", "correspondence"]):
+            return "letter"
+        else:
+            return "universal"
+
 
 class AdvancedAnalyzer(DocumentAnalyzer):
     """Rozszerzona wersja analizatora z dodatkowymi funkcjami"""
@@ -44,411 +258,67 @@ class AdvancedAnalyzer(DocumentAnalyzer):
                 }
                 print(f"Błąd w {pdf_file}: {e}")
         
-        # Generuj raport zbiorczy
-        self._generate_batch_report(results, output_directory)
         return results
-    
-    def analyze_with_confidence_filtering(self, pdf_path: str, min_confidence: float = 0.7) -> str:
-        """Analizuje dokument z filtrowaniem bloków o niskiej pewności"""
-        # Standardowa analiza
-        html_path = self.analyze_document(pdf_path)
-        
-        # Załaduj metadane i przefiltruj
-        metadata_path = html_path.replace('.html', '_metadata.json')
-        with open(metadata_path, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-        
-        # Filtruj bloki
-        filtered_blocks = [
-            block for block in metadata['blocks'] 
-            if block['confidence'] >= min_confidence
-        ]
-        
-        metadata['blocks'] = filtered_blocks
-        metadata['note'] = f"Filtrowane bloki z pewnością >= {min_confidence}"
-        
-        # Zapisz przefiltrowane metadane
-        filtered_path = html_path.replace('.html', '_filtered.json')
-        with open(filtered_path, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=2)
-        
-        print(f"Przefiltrowane metadane: {filtered_path}")
-        return html_path
-    
-    def generate_analytics_dashboard(self, metadata_files: List[str], output_path: str = "analytics.html"):
-        """Generuje dashboard analityczny z wieloma dokumentami"""
-        all_metadata = []
-        
-        # Załaduj wszystkie metadane
-        for metadata_file in metadata_files:
-            with open(metadata_file, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
-                all_metadata.append(metadata)
-        
-        # Analiza statystyczna
-        stats = self._calculate_statistics(all_metadata)
-        
-        # Generuj dashboard HTML
-        dashboard_html = self._create_dashboard_template(stats)
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(dashboard_html)
-        
-        print(f"Dashboard analityczny: {output_path}")
-        return output_path
-    
-    def _generate_batch_report(self, results: Dict, output_dir: str):
-        """Generuje raport zbiorczy dla batch processing"""
-        report = {
-            'summary': {
-                'total_files': len(results),
-                'successful': sum(1 for r in results.values() if r['status'] == 'success'),
-                'failed': sum(1 for r in results.values() if r['status'] == 'error')
-            },
-            'results': results
-        }
-        
-        report_path = os.path.join(output_dir, 'batch_report.json')
-        with open(report_path, 'w', encoding='utf-8') as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
-        
-        print(f"\nRaport zbiorczy: {report_path}")
-    
-    def _calculate_statistics(self, all_metadata: List[Dict]) -> Dict:
-        """Oblicza statystyki z wielu dokumentów"""
-        stats = {
-            'document_types': {},
-            'languages': {},
-            'layout_types': {},
-            'confidence_distribution': [],
-            'blocks_per_document': [],
-            'total_documents': len(all_metadata)
-        }
-        
-        for metadata in all_metadata:
-            # Typy dokumentów
-            doc_type = metadata.get('doc_type', 'unknown')
-            stats['document_types'][doc_type] = stats['document_types'].get(doc_type, 0) + 1
-            
-            # Języki
-            language = metadata.get('language', 'unknown')
-            stats['languages'][language] = stats['languages'].get(language, 0) + 1
-            
-            # Układy
-            layout = metadata.get('layout', 'unknown')
-            stats['layout_types'][layout] = stats['layout_types'].get(layout, 0) + 1
-            
-            # Rozkład pewności
-            stats['confidence_distribution'].append(metadata.get('confidence', 0))
-            
-            # Liczba bloków
-            stats['blocks_per_document'].append(len(metadata.get('blocks', [])))
-        
-        return stats
-    
-    def _create_dashboard_template(self, stats: Dict) -> str:
-        """Tworzy szablon dashboard HTML"""
-        return f'''
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Analityczny PDF</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <style>
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }}
-        .dashboard {{
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            overflow: hidden;
-        }}
-        .header {{
-            background: linear-gradient(135deg, #2c3e50, #34495e);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }}
-        .stats-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            padding: 30px;
-        }}
-        .stat-card {{
-            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            text-align: center;
-        }}
-        .stat-value {{
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }}
-        .stat-label {{
-            color: #6c757d;
-            font-size: 1.1em;
-        }}
-        .charts-section {{
-            padding: 30px;
-            background: #f8f9fa;
-        }}
-        .chart-container {{
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }}
-        .chart-title {{
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 20px;
-            text-align: center;
-        }}
-    </style>
-</head>
-<body>
-    <div class="dashboard">
-        <div class="header">
-            <h1>📊 Dashboard Analityczny PDF</h1>
-            <p>Analiza {stats['total_documents']} dokumentów</p>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value">{stats['total_documents']}</div>
-                <div class="stat-label">Dokumentów przeanalizowanych</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{len(stats['document_types'])}</div>
-                <div class="stat-label">Różnych typów dokumentów</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{len(stats['languages'])}</div>
-                <div class="stat-label">Wykrytych języków</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{sum(stats['blocks_per_document'])}</div>
-                <div class="stat-label">Łączna liczba bloków</div>
-            </div>
-        </div>
-        
-        <div class="charts-section">
-            <div class="chart-container">
-                <div class="chart-title">Rozkład typów dokumentów</div>
-                <canvas id="documentTypesChart"></canvas>
-            </div>
-            
-            <div class="chart-container">
-                <div class="chart-title">Rozkład języków</div>
-                <canvas id="languagesChart"></canvas>
-            </div>
-            
-            <div class="chart-container">
-                <div class="chart-title">Histogram pewności OCR</div>
-                <canvas id="confidenceChart"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        // Dane dla wykresów
-        const documentTypesData = {json.dumps(stats['document_types'])};
-        const languagesData = {json.dumps(stats['languages'])};
-        const confidenceData = {json.dumps(stats['confidence_distribution'])};
-        
-        // Wykres typów dokumentów
-        new Chart(document.getElementById('documentTypesChart'), {{
-            type: 'doughnut',
-            data: {{
-                labels: Object.keys(documentTypesData),
-                datasets: [{{
-                    data: Object.values(documentTypesData),
-                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                plugins: {{
-                    legend: {{
-                        position: 'bottom'
-                    }}
-                }}
-            }}
-        }});
-        
-        // Wykres języków
-        new Chart(document.getElementById('languagesChart'), {{
-            type: 'bar',
-            data: {{
-                labels: Object.keys(languagesData),
-                datasets: [{{
-                    label: 'Liczba dokumentów',
-                    data: Object.values(languagesData),
-                    backgroundColor: '#36A2EB'
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                scales: {{
-                    y: {{
-                        beginAtZero: true
-                    }}
-                }}
-            }}
-        }});
-        
-        // Histogram pewności
-        const confidenceRanges = ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'];
-        const confidenceHistogram = new Array(5).fill(0);
-        
-        confidenceData.forEach(conf => {{
-            const index = Math.min(Math.floor(conf * 5), 4);
-            confidenceHistogram[index]++;
-        }});
-        
-        new Chart(document.getElementById('confidenceChart'), {{
-            type: 'bar',
-            data: {{
-                labels: confidenceRanges,
-                datasets: [{{
-                    label: 'Liczba dokumentów',
-                    data: confidenceHistogram,
-                    backgroundColor: '#4BC0C0'
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                scales: {{
-                    y: {{
-                        beginAtZero: true
-                    }}
-                }}
-            }}
-        }});
-    </script>
-</body>
-</html>
-        '''
 
-class CustomTemplateGenerator:
-    """Generator niestandardowych szablonów dla różnych typów dokumentów"""
-    
-    def __init__(self):
-        self.templates = {
-            'invoice': self._invoice_template(),
-            'contract': self._contract_template(),
-            'form': self._form_template()
-        }
-    
-    def generate_custom_html(self, metadata: DocumentMetadata, template_type: str = 'universal') -> str:
-        """Generuje HTML z niestandardowym szablonem"""
-        template = self.templates.get(template_type, self._universal_template())
-        # Implementacja generowania HTML z niestandardowym szablonem
-        pass
-    
-    def _invoice_template(self) -> str:
-        """Szablon specjalizowany dla faktur"""
-        return '''
-        <!-- Specjalizowany szablon faktury z blokami A,B,C,D -->
-        <div class="invoice-layout">
-            <div class="invoice-header">
-                <div class="sender-block">{{ blocks.A }}</div>
-                <div class="recipient-block">{{ blocks.B }}</div>
-            </div>
-            <div class="invoice-content">{{ blocks.C }}</div>
-            <div class="invoice-footer">{{ blocks.D }}</div>
-        </div>
-        '''
-    
-    def _contract_template(self) -> str:
-        """Szablon dla umów"""
-        return '''<!-- Szablon umowy -->'''
-    
-    def _form_template(self) -> str:
-        """Szablon dla formularzy 6-blokowych"""
-        return '''
-        <!-- Szablon formularza 6-blokowego A,B,C,D,E,F -->
-        <div class="form-6-column">
-            <div class="row-1">
-                <div class="block-A">{{ blocks.A }}</div>
-                <div class="block-B">{{ blocks.B }}</div>
-            </div>
-            <div class="row-2">
-                <div class="block-C">{{ blocks.C }}</div>
-                <div class="block-D">{{ blocks.D }}</div>
-            </div>
-            <div class="row-3">
-                <div class="block-E">{{ blocks.E }}</div>
-                <div class="block-F">{{ blocks.F }}</div>
-            </div>
-        </div>
-        '''
-    
-    def _universal_template(self) -> str:
-        """Uniwersalny szablon"""
-        return '''<!-- Uniwersalny szablon -->'''
 
-# Przykłady użycia
-def example_basic_usage():
-    """Podstawowe użycie analizatora"""
+def process_document(file_path: str, output_format: str = "html", output_dir: str = "output") -> str:
+    """
+    Główna funkcja do przetwarzania dokumentu
+    
+    Args:
+        file_path: Ścieżka do pliku
+        output_format: Format wyjściowy (html, json)
+        output_dir: Katalog wyjściowy
+        
+    Returns:
+        Ścieżka do wygenerowanego pliku
+    """
     analyzer = DocumentAnalyzer()
-    
-    # Analiza pojedynczego dokumentu
-    html_path = analyzer.analyze_document("przykład.pdf")
-    print(f"Wygenerowano: {html_path}")
+    return analyzer.analyze_document(file_path, output_dir)
 
-def example_batch_processing():
-    """Przykład przetwarzania wsadowego"""
-    advanced_analyzer = AdvancedAnalyzer()
-    
-    # Analiza całego folderu
-    results = advanced_analyzer.batch_analyze("pdf_folder/", "output_folder/")
-    
-    # Generuj dashboard
-    metadata_files = [
-        "output_folder/doc1_metadata.json",
-        "output_folder/doc2_metadata.json"
-    ]
-    advanced_analyzer.generate_analytics_dashboard(metadata_files)
 
-def example_confidence_filtering():
-    """Przykład filtrowania według pewności"""
-    advanced_analyzer = AdvancedAnalyzer()
+def main():
+    """Główna funkcja programu"""
+    parser = argparse.ArgumentParser(description="vHTML - Optical HTML Generator")
+    parser.add_argument("input", help="Ścieżka do pliku PDF lub katalogu z plikami PDF")
+    parser.add_argument("-o", "--output", help="Katalog wyjściowy", default="output")
+    parser.add_argument("-b", "--batch", help="Tryb wsadowy (przetwarzanie katalogu)", action="store_true")
+    parser.add_argument("-v", "--view", help="Otwórz wygenerowany HTML w przeglądarce", action="store_true")
     
-    # Analiza z filtrowaniem bloków o niskiej pewności
-    html_path = advanced_analyzer.analyze_with_confidence_filtering(
-        "dokument.pdf", 
-        min_confidence=0.8
-    )
+    args = parser.parse_args()
+    
+    try:
+        if args.batch:
+            if not os.path.isdir(args.input):
+                print(f"Błąd: {args.input} nie jest katalogiem")
+                sys.exit(1)
+            
+            analyzer = AdvancedAnalyzer()
+            results = analyzer.batch_analyze(args.input, args.output)
+            
+            print("\n--- Podsumowanie ---")
+            success = sum(1 for r in results.values() if r['status'] == 'success')
+            print(f"Przetworzono {len(results)} plików: {success} sukcesów, {len(results) - success} błędów")
+            
+        else:
+            if not os.path.isfile(args.input):
+                print(f"Błąd: {args.input} nie jest plikiem")
+                sys.exit(1)
+            
+            analyzer = DocumentAnalyzer()
+            html_path = analyzer.analyze_document(args.input, args.output)
+            
+            print(f"\n✅ Sukces! HTML wygenerowany: {html_path}")
+            
+            if args.view:
+                webbrowser.open(f'file://{os.path.abspath(html_path)}')
+    
+    except Exception as e:
+        print(f"\n❌ Błąd: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    print("🚀 Przykłady użycia PDF Analyzer")
-    print("1. Podstawowe użycie")
-    print("2. Przetwarzanie wsadowe") 
-    print("3. Filtrowanie według pewności")
-    
-    choice = input("Wybierz przykład (1-3): ")
-    
-    if choice == "1":
-        example_basic_usage()
-    elif choice == "2":
-        example_batch_processing()
-    elif choice == "3":
-        example_confidence_filtering()
-    else:
-        print("Nieprawidłowy wybór!")
+    main()

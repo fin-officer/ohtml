@@ -1,76 +1,157 @@
-# vHTML - Optical HTML Generator
+# vHTML - Visual HTML Generator
 
-vHTML (Optic HyperText Markup Language) to system do automatycznej konwersji dokumentów do postaci HTML z wykorzystaniem technik optycznego rozpoznawania znaków (OCR) i analizy układu dokumentu.
+A modular system for converting PDF documents to HTML with OCR and layout analysis.
 
-## 🌟 Funkcje
+## Features
 
-- Automatyczna analiza układu dokumentu
-- Wsparcie dla wielojęzycznego OCR (PL, EN, DE)
-- Generowanie struktury HTML z metadanymi
-- Obsługa dokumentów PDF i obrazów
-- Prosta integracja z istniejącymi systemami
+- PDF to image conversion with preprocessing (denoise, deskew)
+- Document layout analysis and segmentation
+- OCR with multi-language support (Polish, English, German)
+- Language detection and confidence scoring
+- HTML generation with embedded images and metadata
+- Batch processing capabilities
+- Command-line interface
 
-## 📚 Dokumentacja
+## Installation
 
-- [Architektura systemu](docs/ARCHITECTURE.md)
-- [Szablony dokumentów](docs/TEMPLATES.md)
-- [Plan implementacji](docs/IMPLEMENTATION.md)
-- [Struktura projektu](docs/PROJECT_STRUCTURE.md)
-- [Instrukcja instalacji](docs/INSTALLATION.md)
-- [FAQ](docs/FAQ.md)
-
-## 🚀 Szybki start
-
-### Wymagania wstępne
+### Prerequisites
 
 - Python 3.8+
 - Tesseract OCR
-- Poppler (do przetwarzania PDF)
+- Poppler utilities
 
-### Instalacja z Poetry
+### Using Poetry (Recommended)
 
 ```bash
-# Klonowanie repozytorium
-git clone https://github.com/yourusername/vhtml.git
+# Clone the repository
+git clone https://github.com/fin-officer/vhtml.git
 cd vhtml
 
-# Instalacja z Poetry
-poetry install
-
-# Instalacja zależności systemowych
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+# Install with Poetry
+make install
 ```
 
-### Alternatywna instalacja
+### Manual Installation
 
 ```bash
-# Utwórz i aktywuj środowisko wirtualne
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-# lub venv\Scripts\activate  # Windows
+# Install system dependencies
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr tesseract-ocr-pol tesseract-ocr-eng tesseract-ocr-deu poppler-utils
 
-# Instalacja zależności
-pip install -r requirements.txt
-
-# Instalacja zależności systemowych
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+# Install Python dependencies
+pip install poetry
+poetry install
 ```
 
-### Użycie
+## Validate Installation
+
+To verify that all dependencies are correctly installed:
+
+```bash
+make validate
+```
+
+or
+
+```bash
+python scripts/validate_installation.py
+```
+
+## Usage
+
+### Command Line Interface
+
+```bash
+# Process a single PDF file
+poetry run python -m vhtml.main /path/to/document.pdf -o output_directory
+
+# Process a directory of PDF files
+poetry run python -m vhtml.main /path/to/pdf_directory -b -o output_directory
+
+# Process and open in browser
+poetry run python -m vhtml.main /path/to/document.pdf -v
+```
+
+### Integration Test
+
+```bash
+# Run the integration test with your PDF file
+poetry run python scripts/test_integration.py /path/to/document.pdf -v
+```
+
+### Python API
 
 ```python
-from vhtml import process_document
+from vhtml.main import DocumentAnalyzer
 
-# Przetwarzanie pliku PDF
-result = process_document("dokument.pdf", output_format="html")
+# Initialize the analyzer
+analyzer = DocumentAnalyzer()
 
-# Zapis wyników
-with open("wynik.html", "w", encoding="utf-8") as f:
-    f.write(result)
+# Process a document
+html_path = analyzer.analyze_document("document.pdf", "output_dir")
+
+# Print the path to the generated HTML
+print(f"Generated HTML: {html_path}")
 ```
 
-## 📄 Licencja
+## Core Components
 
-Ten projekt jest dostępny na licencji MIT. Zobacz plik [LICENSE](LICENSE) aby uzyskać więcej informacji.
+- **PDFProcessor**: Handles PDF to image conversion and preprocessing
+- **LayoutAnalyzer**: Analyzes document layout and segments content blocks
+- **OCREngine**: Performs OCR with language detection and confidence scoring
+- **HTMLGenerator**: Generates HTML with embedded images and styling
+- **DocumentAnalyzer**: Integrates all components into a complete workflow
+
+## Project Structure
+
+```
+vhtml/
+├── vhtml/
+│   ├── core/
+│   │   ├── pdf_processor.py
+│   │   ├── layout_analyzer.py
+│   │   ├── ocr_engine.py
+│   │   └── html_generator.py
+│   └── main.py
+├── scripts/
+│   ├── validate_installation.py
+│   └── test_integration.py
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── IMPLEMENTATION.md
+│   └── PROJECT_STRUCTURE.md
+├── Makefile
+├── pyproject.toml
+└── README.md
+```
+
+## Development
+
+```bash
+# Setup development environment
+make setup
+
+# Run tests
+make test
+
+# Format code
+make format
+
+# Lint code
+make lint
+
+# Build package
+make build
+```
+
+## Documentation
+
+For more detailed information, see the documentation files:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Implementation](docs/IMPLEMENTATION.md)
+- [Project Structure](docs/PROJECT_STRUCTURE.md)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

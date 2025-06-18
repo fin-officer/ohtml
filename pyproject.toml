@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "vhtml"
-version = "0.1.5"
+version = "0.1.6"
 description = "vhtml (ang. Visual HyperText Markup Language) - Optical character recognition and HTML layout analysis library"
 authors = ["Tom Sapletta"]
 readme = "README.md"
