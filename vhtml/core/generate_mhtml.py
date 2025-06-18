@@ -11,135 +11,143 @@ logger = logging.getLogger('vhtml.mhtml_generator')
 
 def generate_mhtml(document_folder: str, output_file: str) -> bool:
     """
-    Generate MHTML file from document folder containing HTML, JS, and JSON files.
-    
-    Args:
-        document_folder: Path to folder containing document files
-        output_file: Path where to save the MHTML file
-        
-    Returns:
-        bool: True if successful, False otherwise
+    Generate standards-compliant MHTML file with proper MIME parts for HTML, images, JS, and JSON.
+    HTML is NOT base64-encoded; resources are embedded as base64.
     """
     try:
         logger.info(f"Generating MHTML from folder: {document_folder}")
         folder = Path(document_folder)
         name = folder.name
-        
-        # Find required files
+        boundary = "----=_NextPart_000_0000"
+        crlf = "\r\n"
+
+        # Find files
         html_files = list(folder.glob("*.html"))
         js_files = list(folder.glob("*.js"))
         json_files = list(folder.glob("*.json"))
-        png_files = list(folder.glob("*.png"))
-        
+        img_files = list(folder.glob("*.png")) + list(folder.glob("*.jpg")) + list(folder.glob("*.jpeg")) + list(folder.glob("*.gif"))
+
         if not html_files or not json_files:
             logger.error("Missing required HTML or JSON files in the document folder")
             return False
-            
+
         html_file = html_files[0]
         json_file = json_files[0]
-        
-        # JS file is optional
-        js_content = ""
-        if js_files:
-            js_file = js_files[0]
-            logger.debug(f"Found JS file: {js_file}")
-            js_content = js_file.read_text(encoding='utf-8')
-            js_content = f"<script>\n{js_content}\n</script>"
 
-        # Read files
-        logger.debug(f"Reading HTML file: {html_file}")
+        # JS file is optional
+        js_file = js_files[0] if js_files else None
+
+        # Read HTML
         html_content = html_file.read_text(encoding='utf-8')
-        
-        # Load and validate JSON
-        logger.debug(f"Reading JSON file: {json_file}")
+
+        # Embed JSON as a <script> tag
         try:
             json_data = json.loads(json_file.read_text(encoding='utf-8'))
             embedded_json = f"<script>window.data = {json.dumps(json_data, ensure_ascii=False, indent=2)};</script>"
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in {json_file}: {e}")
             return False
-            
-        # Prepare final HTML with embedded data and scripts
+
+        # Embed JS if present
+        js_content = ""
+        if js_file:
+            js_content = js_file.read_text(encoding='utf-8')
+            js_content = f"<script>\n{js_content}\n</script>"
+
+        # Place embedded JSON and JS
         final_html = html_content
         if "<!--DATA-->" in html_content:
             final_html = final_html.replace("<!--DATA-->", embedded_json)
-        if js_content and "<!--SCRIPT-->" in html_content:
-            final_html = final_html.replace("<!--SCRIPT-->", js_content)
-            
-        # If no placeholders found, append data and scripts at the end of body
-        if "<!--DATA-->" not in html_content:
-            final_html = final_html.replace("</body>", f"{embedded_json}\n</body>")
-        if js_content and "<!--SCRIPT-->" not in html_content:
-            final_html = final_html.replace("</body>", f"{js_content}\n</body>")
+        else:
+            final_html = final_html.replace("</body>", f"{embedded_json}{crlf}</body>")
+        if js_content:
+            if "<!--SCRIPT-->" in html_content:
+                final_html = final_html.replace("<!--SCRIPT-->", js_content)
+            else:
+                final_html = final_html.replace("</body>", f"{js_content}{crlf}</body>")
 
-        # Process images in the HTML and embed them as base64
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(final_html, 'html.parser')
-        
-        # Find all images and replace with base64 data
-        for img in soup.find_all('img'):
-            if 'src' in img.attrs:
-                img_src = img['src']
-                if not img_src.startswith(('http://', 'https://', 'data:')):
-                    img_path = folder / img_src
-                    if img_path.exists():
-                        try:
-                            # Read image and convert to base64
-                            with open(img_path, 'rb') as img_file:
-                                img_data = img_file.read()
-                                img_base64 = base64.b64encode(img_data).decode('utf-8')
-                                
-                                # Determine MIME type
-                                if str(img_path).lower().endswith('.png'):
-                                    mime_type = 'image/png'
-                                elif str(img_path).lower().endswith(('.jpg', '.jpeg')):
-                                    mime_type = 'image/jpeg'
-                                elif str(img_path).lower().endswith('.gif'):
-                                    mime_type = 'image/gif'
-                                else:
-                                    mime_type = 'image/png'  # default
-                                
-                                # Replace src with base64 data
-                                img['src'] = f'data:{mime_type};base64,{img_base64}'
-                                logger.debug(f"Embedded image: {img_path}")
-                                
-                        except Exception as e:
-                            logger.error(f"Error embedding image {img_path}: {e}")
-        
-        final_html = str(soup)
-        
-        # Encode as base64 for MHTML
-        encoded_html = base64.b64encode(final_html.encode('utf-8')).decode('utf-8')
+        # Don't embed images as base64 in HTML; let MHTML handle them as separate parts
+
+        # Prepare MHTML parts
+        parts = []
+
+        # HTML part (plain text)
+        parts.append(
+            f"--{boundary}{crlf}"
+            f"Content-Type: text/html; charset=\"utf-8\"{crlf}"
+            f"Content-Transfer-Encoding: 8bit{crlf}"
+            f"Content-Location: {html_file.name}{crlf}{crlf}"
+            f"{final_html}{crlf}"
+        )
+
+        # JS part
+        if js_file:
+            js_data = js_file.read_bytes()
+            js_b64 = base64.b64encode(js_data).decode('ascii')
+            parts.append(
+                f"--{boundary}{crlf}"
+                f"Content-Type: application/javascript{crlf}"
+                f"Content-Transfer-Encoding: base64{crlf}"
+                f"Content-Location: {js_file.name}{crlf}{crlf}"
+                f"{js_b64}{crlf}"
+            )
+
+        # JSON part
+        json_data_bytes = json_file.read_bytes()
+        json_b64 = base64.b64encode(json_data_bytes).decode('ascii')
+        parts.append(
+            f"--{boundary}{crlf}"
+            f"Content-Type: application/json{crlf}"
+            f"Content-Transfer-Encoding: base64{crlf}"
+            f"Content-Location: {json_file.name}{crlf}{crlf}"
+            f"{json_b64}{crlf}"
+        )
+
+        # Image parts
+        for img in img_files:
+            img_bytes = img.read_bytes()
+            img_b64 = base64.b64encode(img_bytes).decode('ascii')
+            # Determine MIME type
+            ext = img.suffix.lower()
+            if ext == '.png':
+                mime = 'image/png'
+            elif ext in ('.jpg', '.jpeg'):
+                mime = 'image/jpeg'
+            elif ext == '.gif':
+                mime = 'image/gif'
+            else:
+                mime = 'application/octet-stream'
+            parts.append(
+                f"--{boundary}{crlf}"
+                f"Content-Type: {mime}{crlf}"
+                f"Content-Transfer-Encoding: base64{crlf}"
+                f"Content-Location: {img.name}{crlf}{crlf}"
+                f"{img_b64}{crlf}"
+            )
+
+        # End boundary
+        parts.append(f"--{boundary}--{crlf}")
+
+        # Compose full MHTML
         now = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        mhtml_header = (
+            f"From: <Saved by vHTML>{crlf}"
+            f"Subject: {name}{crlf}"
+            f"Date: {now}{crlf}"
+            f"MIME-Version: 1.0{crlf}"
+            f"Content-Type: multipart/related; boundary=\"{boundary}\"; type=\"text/html\"{crlf}{crlf}"
+        )
+        mhtml = mhtml_header + ''.join(parts)
 
-        # Create MHTML content
-        mhtml = f"""From: <Saved by vHTML>
-Subject: {name}
-Date: {now}
-MIME-Version: 1.0
-Content-Type: multipart/related; boundary="----=_NextPart_000_0000"; type="text/html"
-
-------=_NextPart_000_0000
-Content-Type: text/html; charset="utf-8"
-Content-Transfer-Encoding: base64
-Content-Location: file://{name}.html
-
-{encoded_html}
-------=_NextPart_000_0000--
-"""
-
-        # Ensure output directory exists
+        # Write file
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Save the MHTML file
-        with output_path.open('w', encoding='utf-8') as f:
+        with output_path.open('w', encoding='utf-8', newline='') as f:
             f.write(mhtml)
-            
         logger.info(f"Successfully generated MHTML: {output_file}")
         print(f"✅ Generated MHTML: {output_file}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Error generating MHTML: {str(e)}", exc_info=True)
         print(f"❌ Error generating MHTML: {str(e)}")
@@ -150,7 +158,7 @@ def main():
     """Command line interface for MHTML generation"""
     import argparse
     import sys
-    
+
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Generate MHTML file from document folder")
     parser.add_argument(
@@ -167,26 +175,26 @@ def main():
         action="store_true",
         help="Enable verbose output"
     )
-    
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     # Set up logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Determine output file path
     input_path = Path(args.input_folder)
     output_file = args.output
     if not output_file:
         output_file = input_path.with_suffix('.mhtml')
-    
+
     # Generate MHTML
     success = generate_mhtml(args.input_folder, output_file)
-    
+
     # Exit with appropriate status code
     sys.exit(0 if success else 1)
 
